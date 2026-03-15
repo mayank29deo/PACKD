@@ -107,7 +107,7 @@ const TABS = [
   { href: '/feed',                      label: 'Home',    Icon: HomeIcon    },
   { href: '/explore',                   label: 'Explore', Icon: ExploreIcon },
   { href: '/create',                    label: 'Create',  Icon: CreateIcon, fab: true },
-  { href: '/profile?tab=Nutrition',     label: 'Calories', Icon: CalorieIcon },
+  { href: '/calories',                  label: 'Calories', Icon: CalorieIcon },
   { href: '/pack',                      label: 'Pack',    Icon: PackIcon    },
   { href: '/profile',                   label: 'Me',      Icon: MeIcon      },
 ];
