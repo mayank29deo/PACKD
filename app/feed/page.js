@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp, SPORT_COLORS, COMMUNITY_POSTS } from '../../lib/AppContext';
@@ -14,6 +14,250 @@ const SPORT_EMOJI = {
   Badminton: '🏸', Fitness: '💪', All: '⚡', Other: '💪',
 };
 
+// ─── Media grid for photo posts ─────────────────────────────────────────────
+function PhotoGrid({ urls }) {
+  const count = urls.length;
+  if (count === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden mb-3 aspect-video bg-packd-card2">
+        <img src={urls[0]} alt="" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  if (count === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden mb-3">
+        {urls.map((u, i) => (
+          <div key={i} className="aspect-square bg-packd-card2">
+            <img src={u} alt="" className="w-full h-full object-cover" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  // 3 or 4: first image tall on the left, rest stacked on right
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden mb-3">
+      <div className="row-span-2 bg-packd-card2">
+        <img src={urls[0]} alt="" className="w-full h-full object-cover" />
+      </div>
+      {urls.slice(1, 4).map((u, i) => (
+        <div key={i} className="relative aspect-square bg-packd-card2">
+          <img src={u} alt="" className="w-full h-full object-cover" />
+          {i === 2 && urls.length > 4 && (
+            <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white font-black text-lg">
+              +{urls.length - 4}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Post composer ───────────────────────────────────────────────────────────
+const SPORT_OPTIONS = ['All','Running','Cycling','Football','Yoga','Swimming','CrossFit','Basketball','Tennis','Hiking','Badminton','Fitness'];
+
+function PostComposer() {
+  const { user, createPost } = useApp();
+  const [expanded, setExpanded] = useState(false);
+  const [text, setText] = useState('');
+  const [sport, setSport] = useState('All');
+  const [mediaFiles, setMediaFiles] = useState([]); // { file, previewUrl, type }
+  const [mediaType, setMediaType] = useState(null); // 'photo' | 'video'
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const photoRef = useRef(null);
+  const videoRef = useRef(null);
+
+  const checkVideoDuration = (file) =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const vid = document.createElement('video');
+      vid.preload = 'metadata';
+      vid.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(vid.duration); };
+      vid.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Cannot read video')); };
+      vid.src = url;
+    });
+
+  const handlePhotos = (e) => {
+    const files = Array.from(e.target.files).slice(0, 4);
+    if (!files.length) return;
+    setMediaFiles(files.map((f) => ({ file: f, previewUrl: URL.createObjectURL(f), type: 'photo' })));
+    setMediaType('photo');
+    setError('');
+    e.target.value = '';
+  };
+
+  const handleVideo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+      const dur = await checkVideoDuration(file);
+      if (dur < 3 || dur > 45) {
+        setError(`Video must be 3–45 seconds (yours is ${Math.round(dur)}s)`);
+        return;
+      }
+      setMediaFiles([{ file, previewUrl: URL.createObjectURL(file), type: 'video', duration: Math.round(dur) }]);
+      setMediaType('video');
+      setError('');
+    } catch {
+      setError('Could not read video. Try a different file.');
+    }
+  };
+
+  const removeMedia = (i) => {
+    const next = mediaFiles.filter((_, idx) => idx !== i);
+    setMediaFiles(next);
+    if (!next.length) setMediaType(null);
+  };
+
+  const handlePost = async () => {
+    if (!text.trim() && !mediaFiles.length) return;
+    setUploading(true);
+    setError('');
+    try {
+      const uploadedUrls = [];
+      for (const m of mediaFiles) {
+        const fd = new FormData();
+        fd.append('file', m.file);
+        fd.append('type', m.type);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        uploadedUrls.push(d.url);
+      }
+      createPost({ content: text.trim(), sport, mediaUrls: uploadedUrls, mediaType });
+      setText(''); setMediaFiles([]); setMediaType(null); setSport('All'); setExpanded(false);
+    } catch (err) {
+      setError(err.message || 'Upload failed. Try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const canPost = (text.trim() || mediaFiles.length > 0) && !uploading;
+
+  return (
+    <div className="packd-card p-4">
+      {/* Collapsed: single row */}
+      {!expanded ? (
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(true)}>
+          <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 border-2 border-packd-orange/40">
+            {user.googleAvatar
+              ? <img src={user.googleAvatar} alt="" className="w-full h-full object-cover" />
+              : <div className="w-full h-full bg-packd-orange flex items-center justify-center text-sm font-black text-white">{user.avatar}</div>
+            }
+          </div>
+          <div className="flex-1 bg-packd-card2 rounded-xl px-4 py-2.5 text-sm text-packd-gray/70 border border-packd-border hover:border-packd-orange/40 transition-colors">
+            Share a moment, workout, or event recap…
+          </div>
+          <button className="w-9 h-9 rounded-xl bg-packd-orange/15 flex items-center justify-center text-packd-orange text-lg font-bold hover:bg-packd-orange/25 transition-colors">
+            📷
+          </button>
+        </div>
+      ) : (
+        /* Expanded composer */
+        <div>
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 border-2 border-packd-orange/40">
+              {user.googleAvatar
+                ? <img src={user.googleAvatar} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-packd-orange flex items-center justify-center text-sm font-black text-white">{user.avatar}</div>
+              }
+            </div>
+            <textarea
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Share your workout, event recap, or moment with the community…"
+              rows={3}
+              className="flex-1 bg-transparent text-sm text-packd-text placeholder-packd-gray/60 focus:outline-none resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Media previews */}
+          {mediaFiles.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-3">
+              {mediaFiles.map((m, i) => (
+                <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden bg-packd-card2 border border-packd-border flex-shrink-0">
+                  {m.type === 'photo'
+                    ? <img src={m.previewUrl} alt="" className="w-full h-full object-cover" />
+                    : <video src={m.previewUrl} className="w-full h-full object-cover" muted playsInline />
+                  }
+                  {m.type === 'video' && (
+                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 rounded">
+                      {m.duration}s
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeMedia(i)}
+                    className="absolute top-1 right-1 w-5 h-5 bg-black/70 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-500 transition-colors"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 border-t border-packd-border pt-3">
+            {/* Photo pick */}
+            <input ref={photoRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
+            <button
+              onClick={() => { setMediaType('photo'); photoRef.current?.click(); }}
+              disabled={mediaType === 'video'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 hover:text-packd-text transition-colors disabled:opacity-40"
+              title="Add photos (up to 4)"
+            >
+              📷 Photo
+            </button>
+
+            {/* Video pick */}
+            <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={handleVideo} />
+            <button
+              onClick={() => { setMediaType('video'); videoRef.current?.click(); }}
+              disabled={mediaType === 'photo'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 hover:text-packd-text transition-colors disabled:opacity-40"
+              title="Add a video clip (3–45 seconds)"
+            >
+              🎥 Video <span className="text-[9px] opacity-60">3–45s</span>
+            </button>
+
+            {/* Sport tag */}
+            <select
+              value={sport}
+              onChange={(e) => setSport(e.target.value)}
+              className="ml-auto bg-packd-card2 border border-packd-border text-xs text-packd-gray rounded-xl px-2 py-1.5 focus:outline-none focus:border-packd-orange cursor-pointer"
+            >
+              {SPORT_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            <button
+              onClick={() => { setExpanded(false); setError(''); }}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handlePost}
+              disabled={!canPost}
+              className="px-4 py-1.5 rounded-xl text-xs font-black bg-packd-orange text-white hover:bg-packd-orange-light transition-colors disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {uploading ? (
+                <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Posting…</>
+              ) : 'Post'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Post card ───────────────────────────────────────────────────────────────
 function PostCard({ post }) {
   const { postLikes, togglePostLike } = useApp();
   const liked = postLikes[post.id];
@@ -44,10 +288,13 @@ function PostCard({ post }) {
       <div className="p-4">
         {/* Author row */}
         <div className="flex items-start gap-3 mb-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+          <div className={`w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center text-sm font-bold flex-shrink-0 ${
             avatarIsEmoji ? 'bg-packd-card2 border border-packd-border text-lg' : `${post.avatarColor} text-white`
           }`}>
-            {post.avatar}
+            {post.googleAvatar
+              ? <img src={post.googleAvatar} alt={post.user} className="w-full h-full object-cover" />
+              : post.avatar
+            }
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -67,7 +314,27 @@ function PostCard({ post }) {
         </div>
 
         {/* Content */}
-        <p className="text-sm text-packd-text leading-relaxed mb-3">{post.content}</p>
+        {post.content && (
+          <p className="text-sm text-packd-text leading-relaxed mb-3">{post.content}</p>
+        )}
+
+        {/* Photo grid */}
+        {post.mediaUrls?.length > 0 && post.mediaType === 'photo' && (
+          <PhotoGrid urls={post.mediaUrls} />
+        )}
+
+        {/* Video player */}
+        {post.mediaUrls?.length > 0 && post.mediaType === 'video' && (
+          <div className="rounded-xl overflow-hidden mb-3 bg-black aspect-video">
+            <video
+              src={post.mediaUrls[0]}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-full"
+            />
+          </div>
+        )}
 
         {/* Event CTA if post has an event */}
         {post.eventId && (
@@ -134,7 +401,7 @@ function PostCard({ post }) {
 
 export default function FeedPage() {
   const router = useRouter();
-  const { user, activityFeed, unreadCount, theme, toggleTheme } = useApp();
+  const { user, activityFeed, unreadCount, theme, toggleTheme, feedPosts } = useApp();
   const [activeTab, setActiveTab] = useState('For You');
   const [showSwipe, setShowSwipe] = useState(false);
 
@@ -143,10 +410,8 @@ export default function FeedPage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = user.name.split(' ')[0];
 
-  // Build a mixed feed for "For You"
-  const forYouFeed = [
-    ...COMMUNITY_POSTS,
-  ];
+  // DB posts first, then static seed posts
+  const forYouFeed = [...feedPosts, ...COMMUNITY_POSTS];
 
   return (
     <div className="min-h-screen bg-packd-bg pb-24">
@@ -268,6 +533,9 @@ export default function FeedPage() {
                 <SwipeEventStack />
               </div>
             )}
+
+            {/* Post composer */}
+            <PostComposer />
 
             {/* Community posts feed */}
             {forYouFeed.map((post) => (
