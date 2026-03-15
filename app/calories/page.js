@@ -121,7 +121,7 @@ export default function CaloriesPage() {
               <p className="text-xs text-packd-gray mt-1">JPG, PNG, WebP · Meals, snacks, anything</p>
             </div>
             <span className="text-xs bg-packd-orange/10 text-packd-orange px-3 py-1.5 rounded-full font-semibold">
-              Powered by Claude AI ✦
+              Powered by AI ✦
             </span>
           </button>
         ) : (
