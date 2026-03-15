@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp, SPORT_COLORS, COMMUNITY_POSTS } from '../../lib/AppContext';
@@ -7,6 +7,168 @@ import BottomNav from '../../components/BottomNav';
 import SwipeEventStack from '../../components/SwipeEventStack';
 
 const FEED_TABS = ['For You', 'Following', 'Discover'];
+
+function formatSecs(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+// ─── Video trimmer modal ─────────────────────────────────────────────────────
+function VideoTrimmer({ file, duration, onConfirm, onCancel }) {
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(Math.min(45, duration));
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef(null);
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+
+  const selectedDuration = endTime - startTime;
+  const isValid = selectedDuration >= 3 && selectedDuration <= 45;
+  const pct = (t) => `${((t / duration) * 100).toFixed(2)}%`;
+
+  const handleStartChange = (v) => {
+    const val = Math.min(parseFloat(v), endTime - 3);
+    setStartTime(val);
+    if (endTime > val + 45) setEndTime(val + 45);
+    if (videoRef.current) videoRef.current.currentTime = val;
+  };
+
+  const handleEndChange = (v) => {
+    const raw = parseFloat(v);
+    const clamped = Math.min(Math.max(raw, startTime + 3), Math.min(startTime + 45, duration));
+    setEndTime(clamped);
+  };
+
+  const handlePreviewToggle = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.currentTime = startTime;
+      videoRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current?.currentTime >= endTime) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = startTime;
+      setIsPlaying(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
+        <button onClick={onCancel} className="text-xs font-semibold text-packd-gray px-2 py-1.5">
+          Cancel
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-black text-white">Trim Clip</p>
+          <p className="text-[10px] text-packd-gray">Select a 3–45 second segment</p>
+        </div>
+        <button
+          onClick={() => isValid && onConfirm(previewUrl, startTime, endTime, selectedDuration)}
+          disabled={!isValid}
+          className="text-xs font-black text-packd-orange px-2 py-1.5 disabled:opacity-30"
+        >
+          Use Clip ✓
+        </button>
+      </div>
+
+      {/* Video preview */}
+      <div className="flex-1 flex items-center justify-center bg-black min-h-0">
+        <video
+          ref={videoRef}
+          src={previewUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={() => setIsPlaying(false)}
+          playsInline
+          className="max-w-full max-h-full"
+        />
+      </div>
+
+      {/* Controls panel */}
+      <div className="bg-packd-bg border-t border-packd-border px-4 py-5 flex-shrink-0">
+        {/* Timeline bar */}
+        <div className="relative h-7 mb-5 select-none">
+          {/* Base track */}
+          <div className="absolute top-2 left-0 right-0 h-3 bg-packd-card2 rounded-full" />
+          {/* Selected range highlight */}
+          <div
+            className="absolute top-2 h-3 bg-packd-orange/50 rounded-full"
+            style={{ left: pct(startTime), width: `${((endTime - startTime) / duration) * 100}%` }}
+          />
+          {/* Start handle */}
+          <div
+            className="absolute top-0 w-1.5 h-7 bg-packd-orange rounded-full shadow-lg"
+            style={{ left: pct(startTime), transform: 'translateX(-50%)' }}
+          />
+          {/* End handle */}
+          <div
+            className="absolute top-0 w-1.5 h-7 bg-packd-orange rounded-full shadow-lg"
+            style={{ left: pct(endTime), transform: 'translateX(-50%)' }}
+          />
+        </div>
+
+        {/* Start slider */}
+        <div className="mb-3">
+          <div className="flex justify-between text-[11px] mb-1">
+            <span className="text-packd-gray font-semibold">Start</span>
+            <span className="text-packd-text font-bold">{formatSecs(startTime)}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, duration - 3).toFixed(1)}
+            step={0.5}
+            value={startTime}
+            onChange={(e) => handleStartChange(e.target.value)}
+            className="w-full h-1.5 rounded-full appearance-none bg-packd-card2 accent-packd-orange cursor-pointer"
+          />
+        </div>
+
+        {/* End slider */}
+        <div className="mb-4">
+          <div className="flex justify-between text-[11px] mb-1">
+            <span className="text-packd-gray font-semibold">End</span>
+            <span className="text-packd-text font-bold">{formatSecs(endTime)}</span>
+          </div>
+          <input
+            type="range"
+            min={(startTime + 3).toFixed(1)}
+            max={Math.min(startTime + 45, duration).toFixed(1)}
+            step={0.5}
+            value={endTime}
+            onChange={(e) => handleEndChange(e.target.value)}
+            className="w-full h-1.5 rounded-full appearance-none bg-packd-card2 accent-packd-orange cursor-pointer"
+          />
+        </div>
+
+        {/* Duration pill + preview button */}
+        <div className="flex items-center justify-between">
+          <div className={`px-3 py-1.5 rounded-full text-xs font-black ${
+            isValid ? 'bg-packd-orange/15 text-packd-orange' : 'bg-red-400/15 text-red-400'
+          }`}>
+            {formatSecs(selectedDuration)}
+            {!isValid && selectedDuration < 3 && <span className="font-normal"> · min 3s</span>}
+            {!isValid && selectedDuration > 45 && <span className="font-normal"> · max 45s</span>}
+          </div>
+          <button
+            onClick={handlePreviewToggle}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-packd-card2 border border-packd-border text-xs font-semibold text-packd-text hover:border-packd-orange/40 transition-colors"
+          >
+            {isPlaying ? '⏸ Pause' : '▶ Preview'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const SPORT_EMOJI = {
   Running: '🏃', Cycling: '🚴', Football: '⚽', Yoga: '🧘', Swimming: '🏊',
@@ -63,10 +225,11 @@ function PostComposer() {
   const [expanded, setExpanded] = useState(false);
   const [text, setText] = useState('');
   const [sport, setSport] = useState('All');
-  const [mediaFiles, setMediaFiles] = useState([]); // { file, previewUrl, type }
+  const [mediaFiles, setMediaFiles] = useState([]); // { file, previewUrl, type, duration?, trimStart?, trimEnd? }
   const [mediaType, setMediaType] = useState(null); // 'photo' | 'video'
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [trimFile, setTrimFile] = useState(null); // { file, duration } — open trimmer
   const photoRef = useRef(null);
   const videoRef = useRef(null);
 
@@ -95,16 +258,38 @@ function PostComposer() {
     e.target.value = '';
     try {
       const dur = await checkVideoDuration(file);
-      if (dur < 3 || dur > 45) {
-        setError(`Video must be 3–45 seconds (yours is ${Math.round(dur)}s)`);
+      if (dur < 3) {
+        setError(`Video is too short (${Math.round(dur)}s). Minimum is 3 seconds.`);
         return;
       }
-      setMediaFiles([{ file, previewUrl: URL.createObjectURL(file), type: 'video', duration: Math.round(dur) }]);
-      setMediaType('video');
-      setError('');
+      if (dur <= 45) {
+        // Valid length — use directly
+        setMediaFiles([{ file, previewUrl: URL.createObjectURL(file), type: 'video', duration: Math.round(dur) }]);
+        setMediaType('video');
+        setError('');
+      } else {
+        // Too long — open trimmer so user can pick a segment
+        setTrimFile({ file, duration: dur });
+        setExpanded(true); // make sure composer is open behind the modal
+      }
     } catch {
       setError('Could not read video. Try a different file.');
     }
+  };
+
+  // Called when user confirms a trim selection
+  const handleTrimConfirm = (previewUrl, trimStart, trimEnd, selectedDuration) => {
+    setMediaFiles([{
+      file: trimFile.file,
+      previewUrl,
+      type: 'video',
+      duration: Math.round(selectedDuration),
+      trimStart,
+      trimEnd,
+    }]);
+    setMediaType('video');
+    setTrimFile(null);
+    setError('');
   };
 
   const removeMedia = (i) => {
@@ -126,7 +311,12 @@ function PostComposer() {
         const res = await fetch('/api/upload', { method: 'POST', body: fd });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
-        uploadedUrls.push(d.url);
+        // For trimmed videos, append HTML5 media fragment so the player
+        // automatically seeks to the selected segment (no server-side ffmpeg needed)
+        const url = (m.type === 'video' && m.trimStart !== undefined)
+          ? `${d.url}#t=${m.trimStart.toFixed(1)},${m.trimEnd.toFixed(1)}`
+          : d.url;
+        uploadedUrls.push(url);
       }
       createPost({ content: text.trim(), sport, mediaUrls: uploadedUrls, mediaType });
       setText(''); setMediaFiles([]); setMediaType(null); setSport('All'); setExpanded(false);
@@ -140,6 +330,17 @@ function PostComposer() {
   const canPost = (text.trim() || mediaFiles.length > 0) && !uploading;
 
   return (
+    <>
+      {/* Video trimmer modal — shown when user picks a video > 45s */}
+      {trimFile && (
+        <VideoTrimmer
+          file={trimFile.file}
+          duration={trimFile.duration}
+          onConfirm={handleTrimConfirm}
+          onCancel={() => setTrimFile(null)}
+        />
+      )}
+
     <div className="packd-card p-4">
       {/* Collapsed: single row */}
       {!expanded ? (
@@ -187,7 +388,8 @@ function PostComposer() {
                     : <video src={m.previewUrl} className="w-full h-full object-cover" muted playsInline />
                   }
                   {m.type === 'video' && (
-                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 rounded">
+                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 rounded flex items-center gap-0.5">
+                      {m.trimStart !== undefined && <span>✂</span>}
                       {m.duration}s
                     </div>
                   )}
@@ -223,7 +425,7 @@ function PostComposer() {
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 hover:text-packd-text transition-colors disabled:opacity-40"
               title="Add a video clip (3–45 seconds)"
             >
-              🎥 Video <span className="text-[9px] opacity-60">3–45s</span>
+              🎥 Video <span className="text-[9px] opacity-60">≤45s or trim</span>
             </button>
 
             {/* Sport tag */}
@@ -254,6 +456,7 @@ function PostComposer() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
