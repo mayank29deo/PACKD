@@ -176,13 +176,55 @@ const SPORT_EMOJI = {
   Badminton: '🏸', Fitness: '💪', All: '⚡', Other: '💪',
 };
 
+// ─── Lightbox ────────────────────────────────────────────────────────────────
+function Lightbox({ urls, startIndex, onClose }) {
+  const [idx, setIdx] = useState(startIndex);
+  const prev = (e) => { e.stopPropagation(); setIdx((i) => (i - 1 + urls.length) % urls.length); };
+  const next = (e) => { e.stopPropagation(); setIdx((i) => (i + 1) % urls.length); };
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') setIdx((i) => (i - 1 + urls.length) % urls.length);
+      if (e.key === 'ArrowRight') setIdx((i) => (i + 1) % urls.length);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [urls.length, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col" onClick={onClose}>
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <span className="text-xs text-white/50">{idx + 1} / {urls.length}</span>
+        <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
+      </div>
+      {/* Image */}
+      <div className="flex-1 flex items-center justify-center min-h-0 px-4" onClick={(e) => e.stopPropagation()}>
+        <img src={urls[idx]} alt="" className="max-w-full max-h-full object-contain rounded-xl" />
+      </div>
+      {/* Prev / Next */}
+      {urls.length > 1 && (
+        <div className="flex items-center justify-between px-4 py-4 flex-shrink-0">
+          <button onClick={prev} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg hover:bg-white/20 transition-colors">‹</button>
+          <div className="flex gap-1.5">
+            {urls.map((_, i) => (
+              <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-packd-orange' : 'bg-white/30'}`} />
+            ))}
+          </div>
+          <button onClick={next} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg hover:bg-white/20 transition-colors">›</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Media grid for photo posts ─────────────────────────────────────────────
-function PhotoGrid({ urls }) {
+function PhotoGrid({ urls, onImageClick }) {
   const count = urls.length;
   if (count === 1) {
     return (
-      <div className="rounded-xl overflow-hidden mb-3 aspect-video bg-packd-card2">
-        <img src={urls[0]} alt="" className="w-full h-full object-cover" />
+      <div className="rounded-xl overflow-hidden mb-3 aspect-video bg-packd-card2 cursor-pointer" onClick={() => onImageClick(0)}>
+        <img src={urls[0]} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
       </div>
     );
   }
@@ -190,22 +232,22 @@ function PhotoGrid({ urls }) {
     return (
       <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden mb-3">
         {urls.map((u, i) => (
-          <div key={i} className="aspect-square bg-packd-card2">
-            <img src={u} alt="" className="w-full h-full object-cover" />
+          <div key={i} className="aspect-square bg-packd-card2 cursor-pointer overflow-hidden" onClick={() => onImageClick(i)}>
+            <img src={u} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
           </div>
         ))}
       </div>
     );
   }
-  // 3 or 4: first image tall on the left, rest stacked on right
+  // 3 or 4: first image tall on left, rest stacked on right
   return (
     <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden mb-3">
-      <div className="row-span-2 bg-packd-card2">
-        <img src={urls[0]} alt="" className="w-full h-full object-cover" />
+      <div className="row-span-2 bg-packd-card2 cursor-pointer overflow-hidden" onClick={() => onImageClick(0)}>
+        <img src={urls[0]} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
       </div>
       {urls.slice(1, 4).map((u, i) => (
-        <div key={i} className="relative aspect-square bg-packd-card2">
-          <img src={u} alt="" className="w-full h-full object-cover" />
+        <div key={i} className="relative aspect-square bg-packd-card2 cursor-pointer overflow-hidden" onClick={() => onImageClick(i + 1)}>
+          <img src={u} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
           {i === 2 && urls.length > 4 && (
             <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white font-black text-lg">
               +{urls.length - 4}
@@ -462,14 +504,35 @@ function PostComposer() {
 
 // ─── Post card ───────────────────────────────────────────────────────────────
 function PostCard({ post }) {
-  const { postLikes, togglePostLike } = useApp();
+  const { postLikes, togglePostLike, user } = useApp();
   const liked = postLikes[post.id];
   const likeCount = post.likes + (liked ? 1 : 0);
   const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState('');
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+
+  const submitComment = () => {
+    const text = commentText.trim();
+    if (!text) return;
+    setComments((prev) => [...prev, {
+      id: Date.now(),
+      user: user.name,
+      avatar: user.avatar,
+      googleAvatar: user.googleAvatar || null,
+      text,
+      time: 'Just now',
+    }]);
+    setCommentText('');
+  };
 
   const avatarIsEmoji = post.avatar.length > 1 || !post.avatar.match(/[A-Z]/);
 
   return (
+    <>
+    {lightboxIndex !== null && (
+      <Lightbox urls={post.mediaUrls} startIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+    )}
     <div className="packd-card overflow-hidden">
       {/* Post type accent */}
       {post.isTip && (
@@ -523,7 +586,7 @@ function PostCard({ post }) {
 
         {/* Photo grid */}
         {post.mediaUrls?.length > 0 && post.mediaType === 'photo' && (
-          <PhotoGrid urls={post.mediaUrls} />
+          <PhotoGrid urls={post.mediaUrls} onImageClick={(i) => setLightboxIndex(i)} />
         )}
 
         {/* Video player */}
@@ -571,10 +634,12 @@ function PostCard({ post }) {
         </button>
         <button
           onClick={() => setShowComments((s) => !s)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 hover:text-packd-text transition-all"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            showComments ? 'bg-packd-orange/10 text-packd-orange' : 'text-packd-gray hover:bg-packd-card2 hover:text-packd-text'
+          }`}
         >
           <span className="text-sm">💬</span>
-          {post.comments}
+          {post.comments + comments.length}
         </button>
         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-packd-gray hover:bg-packd-card2 hover:text-packd-text transition-all">
           <span className="text-sm">↗</span> Share
@@ -586,19 +651,56 @@ function PostCard({ post }) {
         )}
       </div>
 
-      {/* Comments mini-section */}
+      {/* Comments section */}
       {showComments && (
-        <div className="border-t border-packd-border px-4 py-3 bg-packd-card2/50">
-          <div className="flex gap-2 items-center">
-            <div className="w-6 h-6 rounded-full bg-packd-orange flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">A</div>
+        <div className="border-t border-packd-border bg-packd-card2/50">
+          {/* Existing comments */}
+          {comments.length > 0 && (
+            <div className="px-4 pt-3 space-y-3">
+              {comments.map((c) => (
+                <div key={c.id} className="flex gap-2 items-start">
+                  <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-packd-border">
+                    {c.googleAvatar
+                      ? <img src={c.googleAvatar} alt="" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-packd-orange flex items-center justify-center text-[9px] font-bold text-white">{c.avatar}</div>
+                    }
+                  </div>
+                  <div className="flex-1 bg-packd-card rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[11px] font-bold text-white">{c.user}</span>
+                      <span className="text-[10px] text-packd-gray">{c.time}</span>
+                    </div>
+                    <p className="text-xs text-packd-text">{c.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Input row */}
+          <div className="flex gap-2 items-center px-4 py-3">
+            <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-packd-border">
+              {user.googleAvatar
+                ? <img src={user.googleAvatar} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-packd-orange flex items-center justify-center text-[9px] font-bold text-white">{user.avatar}</div>
+              }
+            </div>
             <input
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitComment()}
               placeholder="Add a comment…"
-              className="flex-1 bg-transparent text-xs text-packd-gray placeholder-packd-gray/60 focus:outline-none border-b border-packd-border/60 pb-1 focus:border-packd-orange transition-colors"
+              className="flex-1 bg-packd-card border border-packd-border rounded-xl px-3 py-1.5 text-xs text-packd-text placeholder-packd-gray/60 focus:outline-none focus:border-packd-orange transition-colors"
             />
+            <button
+              onClick={submitComment}
+              disabled={!commentText.trim()}
+              className="w-7 h-7 rounded-xl bg-packd-orange flex items-center justify-center text-white text-xs font-bold disabled:opacity-30 transition-opacity"
+            >↑</button>
           </div>
         </div>
       )}
     </div>
+    </>
   );
 }
 
