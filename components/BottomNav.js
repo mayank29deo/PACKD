@@ -118,7 +118,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-packd-card/95 backdrop-blur-md border-t border-packd-border">
-      <div className="max-w-lg mx-auto flex items-center justify-around py-1.5">
+      <div className="max-w-lg mx-auto flex items-end justify-around py-2">
         {TABS.map(({ href, label, Icon, fab }) => {
           const active = pathname === href || pathname.startsWith(href.split('?')[0] + '/') || pathname === href.split('?')[0];
 
@@ -126,12 +126,12 @@ export default function BottomNav() {
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-150 relative ${
+              className={`flex flex-col items-center gap-0.5 px-2 pb-1 rounded-xl transition-all duration-150 relative ${
                 active ? 'text-packd-orange' : 'text-packd-gray hover:text-packd-text'
               }`}
             >
               {fab ? (
-                <span className="bg-packd-orange rounded-full w-10 h-10 flex items-center justify-center -mt-4 shadow-lg shadow-packd-orange/30">
+                <span className="bg-packd-orange rounded-full w-11 h-11 flex items-center justify-center -mt-5 shadow-lg shadow-packd-orange/30">
                   <Icon />
                 </span>
               ) : (
