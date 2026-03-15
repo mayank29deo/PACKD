@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp, SPORT_COLORS } from '../../lib/AppContext';
 import BottomNav from '../../components/BottomNav';
 
@@ -272,8 +272,12 @@ function NutritionTab() {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, myActivityLog, packs, joinedPacks } = useApp();
-  const [tab, setTab] = useState('Activity');
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return PROFILE_TABS.includes(t) ? t : 'Activity';
+  });
 
   const xpPercent = Math.min(((user.xp % 1000) / 1000) * 100, 100);
   const myPacks = packs.filter((p) => joinedPacks[p.id]);

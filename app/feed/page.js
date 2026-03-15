@@ -754,14 +754,18 @@ export default function FeedPage() {
                   </svg>
                 )}
               </button>
-              <Link href="/notifications"
+              <Link href="/messages"
                 className="relative w-9 h-9 rounded-full bg-packd-card border border-packd-border flex items-center justify-center text-base text-packd-gray hover:text-packd-text transition-colors">
-                🔔
+                💬
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-packd-orange rounded-full text-[9px] font-black text-white flex items-center justify-center">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
+              </Link>
+              <Link href="/notifications"
+                className="relative w-9 h-9 rounded-full bg-packd-card border border-packd-border flex items-center justify-center text-base text-packd-gray hover:text-packd-text transition-colors">
+                🔔
               </Link>
               <Link href="/profile"
                 className="w-9 h-9 rounded-full overflow-hidden border-2 border-packd-orange/50 flex-shrink-0">

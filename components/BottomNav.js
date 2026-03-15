@@ -1,7 +1,6 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useApp } from '../lib/AppContext';
 
 // ─── Custom icon set ──────────────────────────────────────────────────────────
 // All icons: 24×24 viewBox, 1.6px strokes, one filled accent, active = #E8451A
@@ -52,17 +51,20 @@ function CreateIcon() {
   );
 }
 
-/** DMs — speech bubble outline with a mini lightning bolt inside */
-function DMsIcon({ active }) {
+/** Calorie Tracker — apple silhouette with a small leaf and a lightning bolt */
+function CalorieIcon({ active }) {
   const c = active ? '#E8451A' : 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      {/* Apple body */}
       <path
-        d="M4 5C4 3.9 4.9 3 6 3H18C19.1 3 20 3.9 20 5V13C20 14.1 19.1 15 18 15H14L11 19V15H6C4.9 15 4 14.1 4 13V5Z"
-        stroke={c} strokeWidth="1.6" strokeLinejoin="round"
+        d="M17.5 8.5C17.5 8.5 19 9.5 19 13C19 17 16.5 20.5 14 20.5C12.8 20.5 12 20 12 20C12 20 11.2 20.5 10 20.5C7.5 20.5 5 17 5 13C5 9.5 6.5 8.5 6.5 8.5C6.5 8.5 8 7.5 9.5 8C10.5 8.3 11.2 8.5 12 8.5C12.8 8.5 13.5 8.3 14.5 8C16 7.5 17.5 8.5 17.5 8.5Z"
+        stroke={c} strokeWidth="1.5" strokeLinejoin="round" fill={active ? `${c}22` : 'none'}
       />
-      {/* Lightning bolt — fills the bubble */}
-      <path d="M13.5 5.5 L10 10.5 H12.5 L10.5 14.5 L15 8.5 H12.5 Z" fill={c} />
+      {/* Leaf/stem */}
+      <path d="M12 8.5C12 8.5 12 6 14 4.5" stroke={c} strokeWidth="1.4" strokeLinecap="round" />
+      {/* Lightning bolt inside */}
+      <path d="M13 11 L10.5 14 H12.5 L11 17 L14 13.5 H12 Z" fill={c} opacity={active ? 1 : 0.8} />
     </svg>
   );
 }
@@ -102,25 +104,23 @@ function MeIcon({ active }) {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
-  { href: '/feed',     label: 'Home',    Icon: HomeIcon    },
-  { href: '/explore',  label: 'Explore', Icon: ExploreIcon },
-  { href: '/create',   label: 'Create',  Icon: CreateIcon,  fab: true },
-  { href: '/messages', label: 'DMs',     Icon: DMsIcon     },
-  { href: '/pack',     label: 'Pack',    Icon: PackIcon    },
-  { href: '/profile',  label: 'Me',      Icon: MeIcon      },
+  { href: '/feed',                      label: 'Home',    Icon: HomeIcon    },
+  { href: '/explore',                   label: 'Explore', Icon: ExploreIcon },
+  { href: '/create',                    label: 'Create',  Icon: CreateIcon, fab: true },
+  { href: '/profile?tab=Nutrition',     label: 'Calories', Icon: CalorieIcon },
+  { href: '/pack',                      label: 'Pack',    Icon: PackIcon    },
+  { href: '/profile',                   label: 'Me',      Icon: MeIcon      },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function BottomNav() {
   const pathname = usePathname();
-  const { unreadMessages } = useApp();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-packd-card/95 backdrop-blur-md border-t border-packd-border">
       <div className="max-w-lg mx-auto flex items-center justify-around py-1.5">
         {TABS.map(({ href, label, Icon, fab }) => {
-          const active = pathname === href || pathname.startsWith(href + '/');
-          const hasUnread = href === '/messages' && unreadMessages > 0;
+          const active = pathname === href || pathname.startsWith(href.split('?')[0] + '/') || pathname === href.split('?')[0];
 
           return (
             <Link
@@ -138,11 +138,6 @@ export default function BottomNav() {
                 <Icon active={active} />
               )}
               <span className="text-[9px] font-semibold">{label}</span>
-              {hasUnread && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-packd-orange rounded-full text-[9px] font-black text-white flex items-center justify-center">
-                  {unreadMessages > 9 ? '9+' : unreadMessages}
-                </span>
-              )}
             </Link>
           );
         })}
