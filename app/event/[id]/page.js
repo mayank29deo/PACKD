@@ -1,14 +1,89 @@
 'use client';
 import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useApp, SPORT_COLORS } from '../../../lib/AppContext';
 import BottomNav from '../../../components/BottomNav';
+
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 export default function EventDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
   const { events, rsvps, toggleRsvp, packs, joinedPacks, toggleJoinPack } = useApp();
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
 
   const event = events.find((e) => e.id === id);
+
+  const amountFromCost = (cost) => {
+    const n = parseInt(cost?.replace(/[^\d]/g, ''), 10);
+    return isNaN(n) ? 0 : n;
+  };
+
+  async function handlePaidRsvp() {
+    if (!session) { router.push('/auth/login'); return; }
+    setPayError('');
+    setPaying(true);
+    try {
+      // 1. Load Razorpay script
+      const loaded = await loadRazorpayScript();
+      if (!loaded) throw new Error('Could not load payment gateway');
+
+      // 2. Create order on server
+      const orderRes = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: event.id, eventTitle: event.title, amount: amountFromCost(event.cost) }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error);
+
+      // 3. Open Razorpay checkout
+      await new Promise((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          order_id:    orderData.orderId,
+          amount:      orderData.amount,
+          currency:    orderData.currency,
+          name:        'PACKD',
+          description: event.title,
+          prefill:     { email: session.user.email, name: session.user.name },
+          theme:       { color: '#E8451A' },
+          handler: async (response) => {
+            try {
+              // 4. Verify on server
+              const verifyRes = await fetch('/api/payment/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...response, eventId: event.id }),
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok) throw new Error(verifyData.error);
+              toggleRsvp(event.id);
+              resolve();
+            } catch (e) { reject(e); }
+          },
+          modal: { ondismiss: () => reject(new Error('Payment cancelled')) },
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      if (err.message !== 'Payment cancelled') setPayError(err.message);
+    } finally {
+      setPaying(false);
+    }
+  }
   if (!event) {
     return (
       <div className="min-h-screen bg-packd-bg flex items-center justify-center">
@@ -84,8 +159,16 @@ export default function EventDetailPage() {
               </div>
             </div>
 
+            {payError && (
+              <p className="text-xs text-red-400 text-center mb-2">{payError}</p>
+            )}
             <button
-              onClick={() => toggleRsvp(event.id)}
+              onClick={() => {
+                if (isRsvped) { toggleRsvp(event.id); return; }
+                const amount = amountFromCost(event.cost);
+                if (amount > 0) { handlePaidRsvp(); } else { toggleRsvp(event.id); }
+              }}
+              disabled={(spotsLeft === 0 && !isRsvped) || paying}
               className={`w-full py-3.5 text-sm font-bold rounded-xl transition-all ${
                 isRsvped
                   ? 'bg-packd-green/10 border-2 border-packd-green text-packd-green'
@@ -93,9 +176,16 @@ export default function EventDetailPage() {
                   ? 'bg-packd-card2 text-packd-gray cursor-not-allowed border border-packd-border'
                   : 'packd-btn-primary orange-glow'
               }`}
-              disabled={spotsLeft === 0 && !isRsvped}
             >
-              {isRsvped ? '✓ You\'re going! (Cancel RSVP)' : spotsLeft === 0 ? 'Event Full' : 'RSVP — Join Event'}
+              {paying
+                ? 'Processing…'
+                : isRsvped
+                ? '✓ You\'re going! (Cancel RSVP)'
+                : spotsLeft === 0
+                ? 'Event Full'
+                : event.cost === 'Free'
+                ? 'RSVP — Join Event'
+                : `RSVP — Pay ${event.cost}`}
             </button>
           </div>
         </div>
