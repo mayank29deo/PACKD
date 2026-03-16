@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import crypto from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';

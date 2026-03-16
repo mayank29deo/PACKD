@@ -1,11 +1,7 @@
-import Razorpay from 'razorpay';
+export const runtime = 'nodejs';
+
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
-
-const razorpay = new Razorpay({
-  key_id:     process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
 
 export async function POST(request) {
   try {
@@ -19,6 +15,13 @@ export async function POST(request) {
     if (!eventId || !amount || amount <= 0) {
       return Response.json({ error: 'Invalid event or amount' }, { status: 400 });
     }
+
+    // Instantiate inside handler so env vars are available at runtime
+    const Razorpay = (await import('razorpay')).default;
+    const razorpay = new Razorpay({
+      key_id:     process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
 
     const order = await razorpay.orders.create({
       amount:   amount * 100, // paise
