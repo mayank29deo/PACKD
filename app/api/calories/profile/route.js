@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { createServerSupabase } from '@/lib/supabase';
+import { authOptions } from '../../../../lib/auth';
+import { createServerSupabase } from '../../../../lib/supabase';
 
 export async function GET() {
   const session = await getServerSession(authOptions);

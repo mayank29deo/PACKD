@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { createServerSupabase } from '@/lib/supabase';
+import { authOptions } from '../../../lib/auth';
+import { createServerSupabase } from '../../../lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
