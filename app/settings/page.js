@@ -219,21 +219,20 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Forest theme row */}
+            {/* Volt theme row */}
             <div>
               <p className="text-xs text-packd-gray mb-2 font-medium flex items-center gap-1.5">
                 Volt <span className="opacity-50">— neon green & black</span>
                 <span className="text-[10px] bg-packd-orange/15 text-packd-orange px-1.5 py-0.5 rounded-full font-bold">BETA</span>
               </p>
               <div className="flex gap-2">
-                {/* Volt Dark */}
                 <button
                   onClick={() => setTheme('forest-dark')}
                   className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
                     theme === 'forest-dark' ? 'border-[#00d563]' : 'border-packd-border'
                   }`}
                 >
-                  <div className="h-10 bg-[#0a0c0b] flex items-center justify-center gap-1.5">
+                  <div className="h-10 bg-[#060606] flex items-center justify-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-[#00d563]"/>
                     <span className="w-8 h-1.5 rounded bg-[#00d563]/40"/>
                   </div>
@@ -243,19 +242,60 @@ export default function SettingsPage() {
                     <MoonIcon /> Dark
                   </div>
                 </button>
-                {/* Volt Light */}
                 <button
                   onClick={() => setTheme('forest-light')}
                   className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
                     theme === 'forest-light' ? 'border-[#00af4e]' : 'border-packd-border'
                   }`}
                 >
-                  <div className="h-10 bg-[#f5f8f6] flex items-center justify-center gap-1.5">
+                  <div className="h-10 bg-[#f4f7f5] flex items-center justify-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-[#00af4e]"/>
                     <span className="w-8 h-1.5 rounded bg-[#00af4e]/40"/>
                   </div>
                   <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
                     theme === 'forest-light' ? 'text-[#00af4e] bg-[#00af4e]/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <SunIcon /> Light
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Mono theme row */}
+            <div>
+              <p className="text-xs text-packd-gray mb-2 font-medium flex items-center gap-1.5">
+                Mono <span className="opacity-50">— black & white</span>
+                <span className="text-[10px] bg-packd-orange/15 text-packd-orange px-1.5 py-0.5 rounded-full font-bold">BETA</span>
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTheme('mono-dark')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'mono-dark' ? 'border-white' : 'border-packd-border'
+                  }`}
+                >
+                  <div className="h-10 bg-[#070707] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-white"/>
+                    <span className="w-8 h-1.5 rounded bg-white/30"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'mono-dark' ? 'text-white bg-white/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <MoonIcon /> Dark
+                  </div>
+                </button>
+                <button
+                  onClick={() => setTheme('mono-light')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'mono-light' ? 'border-[#0a0a0a]' : 'border-packd-border'
+                  }`}
+                >
+                  <div className="h-10 bg-[#fafafa] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#0a0a0a]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#0a0a0a]/30"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'mono-light' ? 'text-[#0a0a0a] bg-[#0a0a0a]/8' : 'text-packd-gray bg-packd-card2'
                   }`}>
                     <SunIcon /> Light
                   </div>
