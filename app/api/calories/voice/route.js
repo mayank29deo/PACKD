@@ -76,24 +76,31 @@ Rules:
 
 export async function POST(request) {
   try {
-    const { audioData, mimeType } = await request.json();
-
-    if (!audioData || !mimeType) {
-      return Response.json({ error: 'Missing audioData or mimeType' }, { status: 400 });
-    }
-
-    if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
-      return Response.json({ error: 'Reverie API credentials not configured' }, { status: 500 });
-    }
+    const body = await request.json();
+    const { transcript: directTranscript, audioData, mimeType } = body;
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return Response.json({ error: 'Anthropic API key not configured' }, { status: 500 });
     }
 
-    // Step 1: Transcribe audio
-    const transcript = await transcribeAudio(audioData, mimeType);
+    let transcript;
+
+    if (directTranscript) {
+      // Browser transcribed via Web Speech API — use directly
+      transcript = directTranscript.trim();
+    } else {
+      // Fallback: audio upload via Reverie
+      if (!audioData || !mimeType) {
+        return Response.json({ error: 'Missing transcript or audioData' }, { status: 400 });
+      }
+      if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
+        return Response.json({ error: 'Reverie API credentials not configured' }, { status: 500 });
+      }
+      transcript = await transcribeAudio(audioData, mimeType);
+    }
+
     if (!transcript) {
-      return Response.json({ error: 'Could not transcribe audio — please try speaking more clearly' }, { status: 422 });
+      return Response.json({ error: 'Could not transcribe — please try speaking more clearly' }, { status: 422 });
     }
 
     // Step 2: Analyse transcript for nutrition
