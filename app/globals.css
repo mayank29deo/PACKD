@@ -24,6 +24,36 @@
   color-scheme: dark;
 }
 
+/* ── Forest theme — dark green base, neon-green accent ───────────────────── */
+html.forest {
+  --packd-bg:           8 18 10;       /* #08120a  near-black green      */
+  --packd-card:         13 28 16;      /* #0d1c10  dark green card        */
+  --packd-card2:        18 40 22;      /* #122814  slightly lighter       */
+  --packd-border:       28 70 38;      /* #1c4626  green border           */
+  --packd-gray:         110 160 125;   /* #6ea07d  muted sage             */
+  --packd-text:         195 230 205;   /* #c3e6cd  pale green-white       */
+  --packd-orange:       0 213 99;      /* #00d563  neon green accent      */
+  --packd-orange-light: 57 231 130;    /* #39e782  lighter neon           */
+  --packd-gold:         180 210 50;    /* #b4d232  yellow-green           */
+  --packd-green:        0 213 99;      /* same as accent                  */
+  color-scheme: dark;
+}
+
+/* Forest light variant */
+html.forest.light {
+  --packd-bg:           238 250 241;   /* #eefaf1  very pale green        */
+  --packd-card:         255 255 255;   /* #ffffff  white cards            */
+  --packd-card2:        225 245 230;   /* #e1f5e6  light green tint       */
+  --packd-border:       190 230 200;   /* #bee6c8  soft green border      */
+  --packd-gray:         80 130 95;     /* #50825f  muted green-gray       */
+  --packd-text:         15 45 25;      /* #0f2d19  dark green text        */
+  --packd-orange:       0 170 75;      /* #00aa4b  green accent on light  */
+  --packd-orange-light: 0 213 99;      /* #00d563  brighter              */
+  --packd-gold:         110 150 20;    /* #6e9614  olive gold             */
+  --packd-green:        0 170 75;      /* same as accent                  */
+  color-scheme: light;
+}
+
 /* Light theme — toggled by adding class="light" to <html> */
 html.light {
   --packd-bg:           247 243 239;   /* #F7F3EF  warm cream          */
@@ -104,6 +134,23 @@ body {
 .card-hover:hover {
   transform: translateY(-2px);
   border-color: #E8451A40;
+}
+
+/* ─── Forest-mode overrides ──────────────────────────────────────────────── */
+html.forest .orange-glow {
+  box-shadow: 0 0 30px rgba(0, 213, 99, 0.2);
+}
+html.forest .text-gradient {
+  background: linear-gradient(135deg, #00d563, #39e782);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+html.forest .card-hover:hover {
+  border-color: rgba(0, 213, 99, 0.25);
+}
+html.forest .xp-fill {
+  background: linear-gradient(to right, #00d563, #39e782);
 }
 
 /* ─── Light-mode gradient overrides ─────────────────────────────────────── */

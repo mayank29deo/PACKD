@@ -36,7 +36,7 @@ function MoonIcon() {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, updateUser, logout, theme, toggleTheme } = useApp();
+  const { user, updateUser, logout, theme, setTheme } = useApp();
   const [form, setForm] = useState({
     name: user.name,
     username: user.username,
@@ -65,7 +65,7 @@ export default function SettingsPage() {
     router.push('/auth/login');
   }
 
-  const isLight = theme === 'light';
+
 
   return (
     <div className="min-h-screen bg-packd-bg pb-10">
@@ -175,70 +175,92 @@ export default function SettingsPage() {
         {/* Appearance */}
         <div>
           <h2 className="text-xs font-bold text-packd-gray uppercase tracking-widest mb-3">Appearance</h2>
-          <div className="packd-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-white">Theme</p>
-                <p className="text-xs text-packd-gray mt-0.5">
-                  {isLight ? 'Light — warm & bright' : 'Dark — easy on the eyes'}
-                </p>
-              </div>
+          <div className="packd-card p-4 space-y-4">
+            <p className="text-sm font-semibold text-white">Theme</p>
 
-              {/* Sliding pill toggle */}
-              <button
-                onClick={toggleTheme}
-                aria-label="Toggle theme"
-                className={`relative flex items-center w-[72px] h-9 rounded-full border transition-all duration-300 ${
-                  isLight
-                    ? 'bg-amber-100 border-amber-300'
-                    : 'bg-packd-card2 border-packd-border'
-                }`}
-              >
-                {/* sliding pill */}
-                <span
-                  className={`absolute top-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center transition-all duration-300 ${
-                    isLight
-                      ? 'left-[38px] bg-amber-400 text-white'
-                      : 'left-1 bg-packd-orange text-white'
+            {/* PACKD theme row */}
+            <div>
+              <p className="text-xs text-packd-gray mb-2 font-medium">PACKD <span className="opacity-50">— orange & black</span></p>
+              <div className="flex gap-2">
+                {/* PACKD Dark */}
+                <button
+                  onClick={() => setTheme('dark')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'dark' ? 'border-[#E8451A]' : 'border-packd-border'
                   }`}
                 >
-                  {isLight ? <SunIcon /> : <MoonIcon />}
-                </span>
-                {/* ghost icon on the other side */}
-                <span
-                  className={`absolute top-1 w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 text-packd-gray/40 ${
-                    isLight ? 'left-1' : 'left-[38px]'
+                  <div className="h-10 bg-[#0d1117] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#E8451A]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#E8451A]/40"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'dark' ? 'text-[#E8451A] bg-[#E8451A]/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <MoonIcon /> Dark
+                  </div>
+                </button>
+                {/* PACKD Light */}
+                <button
+                  onClick={() => setTheme('light')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'light' ? 'border-[#E8451A]' : 'border-packd-border'
                   }`}
                 >
-                  {isLight ? <MoonIcon /> : <SunIcon />}
-                </span>
-              </button>
+                  <div className="h-10 bg-[#F7F3EF] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#E8451A]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#E8451A]/40"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'light' ? 'text-[#E8451A] bg-[#E8451A]/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <SunIcon /> Light
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* Theme preview chips */}
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => !isLight || toggleTheme()}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
-                  !isLight
-                    ? 'bg-packd-orange/10 border-packd-orange text-packd-orange'
-                    : 'bg-packd-bg border-packd-border text-packd-gray'
-                }`}
-              >
-                <MoonIcon />
-                Dark
-              </button>
-              <button
-                onClick={() => isLight || toggleTheme()}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
-                  isLight
-                    ? 'bg-packd-orange/10 border-packd-orange text-packd-orange'
-                    : 'bg-packd-bg border-packd-border text-packd-gray'
-                }`}
-              >
-                <SunIcon />
-                Light
-              </button>
+            {/* Forest theme row */}
+            <div>
+              <p className="text-xs text-packd-gray mb-2 font-medium flex items-center gap-1.5">
+                Forest <span className="opacity-50">— green & black</span>
+                <span className="text-[10px] bg-packd-orange/15 text-packd-orange px-1.5 py-0.5 rounded-full font-bold">BETA</span>
+              </p>
+              <div className="flex gap-2">
+                {/* Forest Dark */}
+                <button
+                  onClick={() => setTheme('forest-dark')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'forest-dark' ? 'border-[#00d563]' : 'border-packd-border'
+                  }`}
+                >
+                  <div className="h-10 bg-[#08120a] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#00d563]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#00d563]/40"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'forest-dark' ? 'text-[#00d563] bg-[#00d563]/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <MoonIcon /> Dark
+                  </div>
+                </button>
+                {/* Forest Light */}
+                <button
+                  onClick={() => setTheme('forest-light')}
+                  className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
+                    theme === 'forest-light' ? 'border-[#00aa4b]' : 'border-packd-border'
+                  }`}
+                >
+                  <div className="h-10 bg-[#eefaf1] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#00aa4b]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#00aa4b]/40"/>
+                  </div>
+                  <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
+                    theme === 'forest-light' ? 'text-[#00aa4b] bg-[#00aa4b]/10' : 'text-packd-gray bg-packd-card2'
+                  }`}>
+                    <SunIcon /> Light
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
         </div>
