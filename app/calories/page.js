@@ -755,6 +755,49 @@ export default function CaloriesPage() {
     if (fileRef.current) fileRef.current.value = '';
   }
 
+  // ── Convert any audio blob → WAV (Reverie requires wav/ogg/mp3, not webm) ───
+  async function blobToWav(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioCtx    = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+
+    const numChannels  = audioBuffer.numberOfChannels;
+    const sampleRate   = audioBuffer.sampleRate;
+    const numSamples   = audioBuffer.length;
+    const pcmData      = new Int16Array(numSamples * numChannels);
+
+    for (let ch = 0; ch < numChannels; ch++) {
+      const channel = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < numSamples; i++) {
+        const s = Math.max(-1, Math.min(1, channel[i]));
+        pcmData[i * numChannels + ch] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+    }
+
+    const wavBuffer = new ArrayBuffer(44 + pcmData.byteLength);
+    const view      = new DataView(wavBuffer);
+    const write     = (off, val, len) => { for (let i = 0; i < len; i++) view.setUint8(off + i, (val >> (8 * i)) & 0xff); };
+    const writeStr  = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+
+    writeStr(0,  'RIFF');
+    write(4,  36 + pcmData.byteLength, 4);
+    writeStr(8,  'WAVE');
+    writeStr(12, 'fmt ');
+    write(16, 16, 4);               // PCM chunk size
+    write(20, 1,  2);               // PCM format
+    write(22, numChannels, 2);
+    write(24, sampleRate,  4);
+    write(28, sampleRate * numChannels * 2, 4); // byte rate
+    write(32, numChannels * 2, 2);  // block align
+    write(34, 16, 2);               // bits per sample
+    writeStr(36, 'data');
+    write(40, pcmData.byteLength, 4);
+    new Int16Array(wavBuffer, 44).set(pcmData);
+
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
   // ── Voice recording ──────────────────────────────────────────────────────────
   async function startRecording() {
     setVoiceError(null); setVoiceResult(null);
@@ -800,17 +843,19 @@ export default function CaloriesPage() {
   async function submitVoice(blob, audioMime) {
     setVoiceLoading(true);
     try {
-      const base64 = await new Promise((resolve, reject) => {
+      // Convert to WAV — Reverie doesn't support webm/opus containers
+      const wavBlob = await blobToWav(blob);
+      const base64  = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
-        reader.readAsDataURL(blob);
+        reader.readAsDataURL(wavBlob);
       });
 
       const res  = await fetch('/api/calories/voice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioData: base64, mimeType: audioMime }),
+        body: JSON.stringify({ audioData: base64, mimeType: 'audio/wav' }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Voice analysis failed');
