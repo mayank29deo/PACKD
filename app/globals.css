@@ -307,8 +307,30 @@ html.mono .card-hover:hover {
     0 4px 32px rgba(0, 0, 0, 0.6);
 }
 
-/* FAB: dark icon on white button */
-html.mono .fab-btn { color: rgb(7 7 7); }
+/* ─── Mono: fix blown-out white active states ───────────────────────────── */
+
+/* Sport filter pills: filled white → slim white-border pill */
+html.mono .sport-pill-active {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+}
+
+/* Segment / toggle buttons that use bg-packd-orange (becomes white in mono) */
+html.mono button.bg-packd-orange {
+  background-color: rgba(255, 255, 255, 0.09) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* FAB: premium dark circle + white border + white plus */
+html.mono .fab-btn {
+  background-color: rgb(16 16 16) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.07), 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+  color: #ffffff !important;
+}
 
 /* Scrollbar: white glint */
 html.mono ::-webkit-scrollbar-thumb {
