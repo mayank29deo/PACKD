@@ -24,18 +24,18 @@
   color-scheme: dark;
 }
 
-/* ── Volt theme — near-black base, neon-green accent only ────────────────── */
-/* Philosophy: same depth as the orange theme — backgrounds stay near-black,
-   green is used ONLY for accent/highlight, never for card fills.            */
+/* ── Volt theme — pure black + neon green glow ───────────────────────────────
+   Premium philosophy: pure black canvas, green is LIGHT not paint.
+   Backgrounds carry zero hue — only accent elements glow neon green.        */
 html.forest {
-  --packd-bg:           10 12 11;      /* #0a0c0b  near-black, 1% green tint    */
-  --packd-card:         18 21 19;      /* #121513  dark card, barely green      */
-  --packd-card2:        25 29 26;      /* #191d1a  slightly lighter             */
-  --packd-border:       40 46 42;      /* #282e2a  subtle dark border           */
-  --packd-gray:         138 148 142;   /* #8a948e  neutral gray, slight green   */
-  --packd-text:         200 208 204;   /* #c8d0cc  near-white, barely tinted    */
-  --packd-orange:       0 213 99;      /* #00d563  neon green — accent only     */
-  --packd-orange-light: 57 231 130;    /* #39e782  lighter neon                 */
+  --packd-bg:           6 6 6;         /* #060606  near-pure black              */
+  --packd-card:         12 12 12;      /* #0c0c0c  dark card — zero tint        */
+  --packd-card2:        18 18 18;      /* #121212  slightly lighter             */
+  --packd-border:       28 28 28;      /* #1c1c1c  crisp dark border            */
+  --packd-gray:         130 138 134;   /* #82888  neutral gray                  */
+  --packd-text:         218 224 220;   /* #dae0dc  near-white                   */
+  --packd-orange:       0 213 99;      /* #00d563  neon green — THE accent      */
+  --packd-orange-light: 80 240 145;    /* #50f091  lighter neon bloom           */
   --packd-gold:         212 172 13;    /* #d4ac0d  same gold                    */
   --packd-green:        0 213 99;      /* same as accent                        */
   color-scheme: dark;
@@ -43,16 +43,16 @@ html.forest {
 
 /* Volt light variant */
 html.forest.light {
-  --packd-bg:           245 248 246;   /* #f5f8f6  off-white, barely green      */
-  --packd-card:         255 255 255;   /* #ffffff  clean white cards            */
-  --packd-card2:        237 242 239;   /* #edf2ef  very subtle green tint       */
-  --packd-border:       216 226 220;   /* #d8e2dc  soft border                  */
-  --packd-gray:         104 118 110;   /* #68766e  neutral warm-gray            */
-  --packd-text:         24 30 26;      /* #181e1a  near-black                   */
-  --packd-orange:       0 175 78;      /* #00af4e  green accent on light        */
+  --packd-bg:           244 247 245;   /* #f4f7f5  near-white, zero tint        */
+  --packd-card:         255 255 255;   /* #ffffff  pure white cards             */
+  --packd-card2:        236 241 238;   /* #ecf1ee  soft off-white               */
+  --packd-border:       214 224 218;   /* #d6e0da  light neutral border         */
+  --packd-gray:         102 116 108;   /* #66746c  medium gray                  */
+  --packd-text:         22 28 24;      /* #161c18  near-black                   */
+  --packd-orange:       0 168 74;      /* #00a84a  rich green on light          */
   --packd-orange-light: 0 213 99;      /* #00d563  brighter                     */
   --packd-gold:         180 140 10;    /* #b48c0a  same gold                    */
-  --packd-green:        0 175 78;      /* same as accent                        */
+  --packd-green:        0 168 74;      /* same as accent                        */
   color-scheme: light;
 }
 
@@ -138,21 +138,83 @@ body {
   border-color: #E8451A40;
 }
 
-/* ─── Forest-mode overrides ──────────────────────────────────────────────── */
-html.forest .orange-glow {
-  box-shadow: 0 0 30px rgba(0, 213, 99, 0.2);
+/* ─── Volt (forest) dark — premium glow system ───────────────────────────── */
+
+/* Ambient body glow: barely visible green radiance from top */
+html.forest body {
+  background-image: radial-gradient(
+    ellipse 80% 40% at 50% -10%,
+    rgba(0, 213, 99, 0.07) 0%,
+    transparent 70%
+  );
 }
+
+/* Cards: pure dark with a hair-thin green top-edge highlight */
+html.forest .packd-card {
+  box-shadow:
+    inset 0 1px 0 rgba(0, 213, 99, 0.08),
+    0 4px 32px rgba(0, 0, 0, 0.6);
+  border-color: rgba(28, 28, 28, 1);
+}
+
+/* XP / progress bar: neon glow */
+html.forest .xp-fill {
+  background: linear-gradient(90deg, #00d563, #50f091);
+  box-shadow: 0 0 10px rgba(0, 213, 99, 0.7), 0 0 24px rgba(0, 213, 99, 0.3);
+}
+
+/* Primary buttons: glow ring */
+html.forest .packd-btn-primary {
+  box-shadow: 0 0 14px rgba(0, 213, 99, 0.35);
+}
+html.forest .packd-btn-primary:hover {
+  box-shadow: 0 0 24px rgba(0, 213, 99, 0.55);
+}
+
+/* Text gradient: neon sweep */
 html.forest .text-gradient {
-  background: linear-gradient(135deg, #00d563, #39e782);
+  background: linear-gradient(135deg, #00d563 0%, #50f091 50%, #00d563 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-html.forest .card-hover:hover {
-  border-color: rgba(0, 213, 99, 0.25);
+
+/* Orange glow → green glow */
+html.forest .orange-glow {
+  box-shadow: 0 0 40px rgba(0, 213, 99, 0.18);
 }
-html.forest .xp-fill {
-  background: linear-gradient(to right, #00d563, #39e782);
+
+/* Card hover: green border glow */
+html.forest .card-hover:hover {
+  border-color: rgba(0, 213, 99, 0.3) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 213, 99, 0.1),
+    0 0 20px rgba(0, 213, 99, 0.08),
+    0 4px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Scrollbar: green glow */
+html.forest ::-webkit-scrollbar-thumb {
+  background: rgba(0, 213, 99, 0.25);
+  box-shadow: 0 0 6px rgba(0, 213, 99, 0.4);
+}
+html.forest ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 213, 99, 0.45);
+}
+
+/* Volt light mode card shadow */
+html.forest.light .packd-card {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 168, 74, 0.08);
+}
+html.forest.light .xp-fill {
+  background: linear-gradient(90deg, #00a84a, #00d563);
+  box-shadow: none;
+}
+html.forest.light .packd-btn-primary {
+  box-shadow: 0 2px 12px rgba(0, 168, 74, 0.25);
+}
+html.forest.light body {
+  background-image: none;
 }
 
 /* ─── Light-mode gradient overrides ─────────────────────────────────────── */
