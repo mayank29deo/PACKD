@@ -1,34 +1,36 @@
 import Anthropic from '@anthropic-ai/sdk';
-import OpenAI, { toFile } from 'openai';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
 import { createServerSupabase } from '../../../../lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// NVIDIA NIM is OpenAI-API-compatible — point the SDK at their base URL
-function getNvidiaClient() {
-  return new OpenAI({
-    apiKey:  process.env.NVIDIA_API_KEY,
-    baseURL: 'https://integrate.api.nvidia.com/v1',
-  });
-}
-
 async function transcribeAudio(audioBase64, mimeType) {
   const audioBuffer = Buffer.from(audioBase64, 'base64');
   const ext = mimeType.split('/')[1]?.split(';')[0] || 'webm';
 
-  // toFile() from the openai SDK creates a properly-typed File object
-  // that the SDK's multipart uploader handles correctly in Node.js
-  const file = await toFile(audioBuffer, `recording.${ext}`, { type: mimeType });
+  const form = new FormData();
+  form.append('audio_file', new Blob([audioBuffer], { type: mimeType }), `recording.${ext}`);
 
-  const nvidia = getNvidiaClient();
-  const transcription = await nvidia.audio.transcriptions.create({
-    file,
-    model: 'openai/whisper-large-v3',
+  const response = await fetch('https://revapi.reverieinc.com/', {
+    method: 'POST',
+    headers: {
+      'REV-API-KEY': process.env.REVERIE_API_KEY,
+      'REV-APP-ID':  process.env.REVERIE_APP_ID,
+      'REV-APPNAME': 'stt_file',
+      'src_lang':    'en',
+      'domain':      'general',
+    },
+    body: form,
   });
 
-  return transcription.text?.trim() || '';
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Transcription failed: ${response.status} ${errText}`);
+  }
+
+  const result = await response.json();
+  return result.text?.trim() || result.display_text?.trim() || '';
 }
 
 async function analyseTranscript(transcript) {
@@ -80,8 +82,8 @@ export async function POST(request) {
       return Response.json({ error: 'Missing audioData or mimeType' }, { status: 400 });
     }
 
-    if (!process.env.NVIDIA_API_KEY) {
-      return Response.json({ error: 'NVIDIA API key not configured' }, { status: 500 });
+    if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
+      return Response.json({ error: 'Reverie API credentials not configured' }, { status: 500 });
     }
 
     if (!process.env.ANTHROPIC_API_KEY) {
