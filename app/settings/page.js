@@ -222,18 +222,18 @@ export default function SettingsPage() {
             {/* Forest theme row */}
             <div>
               <p className="text-xs text-packd-gray mb-2 font-medium flex items-center gap-1.5">
-                Forest <span className="opacity-50">— green & black</span>
+                Volt <span className="opacity-50">— neon green & black</span>
                 <span className="text-[10px] bg-packd-orange/15 text-packd-orange px-1.5 py-0.5 rounded-full font-bold">BETA</span>
               </p>
               <div className="flex gap-2">
-                {/* Forest Dark */}
+                {/* Volt Dark */}
                 <button
                   onClick={() => setTheme('forest-dark')}
                   className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
                     theme === 'forest-dark' ? 'border-[#00d563]' : 'border-packd-border'
                   }`}
                 >
-                  <div className="h-10 bg-[#08120a] flex items-center justify-center gap-1.5">
+                  <div className="h-10 bg-[#0a0c0b] flex items-center justify-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-[#00d563]"/>
                     <span className="w-8 h-1.5 rounded bg-[#00d563]/40"/>
                   </div>
@@ -243,19 +243,19 @@ export default function SettingsPage() {
                     <MoonIcon /> Dark
                   </div>
                 </button>
-                {/* Forest Light */}
+                {/* Volt Light */}
                 <button
                   onClick={() => setTheme('forest-light')}
                   className={`flex-1 rounded-xl border-2 overflow-hidden transition-all ${
-                    theme === 'forest-light' ? 'border-[#00aa4b]' : 'border-packd-border'
+                    theme === 'forest-light' ? 'border-[#00af4e]' : 'border-packd-border'
                   }`}
                 >
-                  <div className="h-10 bg-[#eefaf1] flex items-center justify-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-[#00aa4b]"/>
-                    <span className="w-8 h-1.5 rounded bg-[#00aa4b]/40"/>
+                  <div className="h-10 bg-[#f5f8f6] flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-[#00af4e]"/>
+                    <span className="w-8 h-1.5 rounded bg-[#00af4e]/40"/>
                   </div>
                   <div className={`py-1.5 text-xs font-semibold text-center transition-colors ${
-                    theme === 'forest-light' ? 'text-[#00aa4b] bg-[#00aa4b]/10' : 'text-packd-gray bg-packd-card2'
+                    theme === 'forest-light' ? 'text-[#00af4e] bg-[#00af4e]/10' : 'text-packd-gray bg-packd-card2'
                   }`}>
                     <SunIcon /> Light
                   </div>

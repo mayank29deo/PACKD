@@ -24,33 +24,35 @@
   color-scheme: dark;
 }
 
-/* ── Forest theme — dark green base, neon-green accent ───────────────────── */
+/* ── Volt theme — near-black base, neon-green accent only ────────────────── */
+/* Philosophy: same depth as the orange theme — backgrounds stay near-black,
+   green is used ONLY for accent/highlight, never for card fills.            */
 html.forest {
-  --packd-bg:           8 18 10;       /* #08120a  near-black green      */
-  --packd-card:         13 28 16;      /* #0d1c10  dark green card        */
-  --packd-card2:        18 40 22;      /* #122814  slightly lighter       */
-  --packd-border:       28 70 38;      /* #1c4626  green border           */
-  --packd-gray:         110 160 125;   /* #6ea07d  muted sage             */
-  --packd-text:         195 230 205;   /* #c3e6cd  pale green-white       */
-  --packd-orange:       0 213 99;      /* #00d563  neon green accent      */
-  --packd-orange-light: 57 231 130;    /* #39e782  lighter neon           */
-  --packd-gold:         180 210 50;    /* #b4d232  yellow-green           */
-  --packd-green:        0 213 99;      /* same as accent                  */
+  --packd-bg:           10 12 11;      /* #0a0c0b  near-black, 1% green tint    */
+  --packd-card:         18 21 19;      /* #121513  dark card, barely green      */
+  --packd-card2:        25 29 26;      /* #191d1a  slightly lighter             */
+  --packd-border:       40 46 42;      /* #282e2a  subtle dark border           */
+  --packd-gray:         138 148 142;   /* #8a948e  neutral gray, slight green   */
+  --packd-text:         200 208 204;   /* #c8d0cc  near-white, barely tinted    */
+  --packd-orange:       0 213 99;      /* #00d563  neon green — accent only     */
+  --packd-orange-light: 57 231 130;    /* #39e782  lighter neon                 */
+  --packd-gold:         212 172 13;    /* #d4ac0d  same gold                    */
+  --packd-green:        0 213 99;      /* same as accent                        */
   color-scheme: dark;
 }
 
-/* Forest light variant */
+/* Volt light variant */
 html.forest.light {
-  --packd-bg:           238 250 241;   /* #eefaf1  very pale green        */
-  --packd-card:         255 255 255;   /* #ffffff  white cards            */
-  --packd-card2:        225 245 230;   /* #e1f5e6  light green tint       */
-  --packd-border:       190 230 200;   /* #bee6c8  soft green border      */
-  --packd-gray:         80 130 95;     /* #50825f  muted green-gray       */
-  --packd-text:         15 45 25;      /* #0f2d19  dark green text        */
-  --packd-orange:       0 170 75;      /* #00aa4b  green accent on light  */
-  --packd-orange-light: 0 213 99;      /* #00d563  brighter              */
-  --packd-gold:         110 150 20;    /* #6e9614  olive gold             */
-  --packd-green:        0 170 75;      /* same as accent                  */
+  --packd-bg:           245 248 246;   /* #f5f8f6  off-white, barely green      */
+  --packd-card:         255 255 255;   /* #ffffff  clean white cards            */
+  --packd-card2:        237 242 239;   /* #edf2ef  very subtle green tint       */
+  --packd-border:       216 226 220;   /* #d8e2dc  soft border                  */
+  --packd-gray:         104 118 110;   /* #68766e  neutral warm-gray            */
+  --packd-text:         24 30 26;      /* #181e1a  near-black                   */
+  --packd-orange:       0 175 78;      /* #00af4e  green accent on light        */
+  --packd-orange-light: 0 213 99;      /* #00d563  brighter                     */
+  --packd-gold:         180 140 10;    /* #b48c0a  same gold                    */
+  --packd-green:        0 175 78;      /* same as accent                        */
   color-scheme: light;
 }
 
