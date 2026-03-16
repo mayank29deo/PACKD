@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 const SPORTS = ['Running', 'Cycling', 'Yoga', 'Swimming', 'Football', 'Basketball', 'Tennis', 'Hiking', 'CrossFit', 'Badminton', 'Volleyball', 'Boxing'];
@@ -85,12 +87,24 @@ function CounterStat({ value, label, icon, delay }) {
 }
 
 export default function LandingPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [joined, setJoined] = useState(false);
   const [activeSport, setActiveSport] = useState(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setTimeout(() => setMounted(true), 100); }, []);
+
+  // Redirect signed-in users straight to the feed
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/feed');
+    }
+  }, [status, router]);
+
+  // Show nothing while checking session to avoid flash of landing page
+  if (status === 'loading' || status === 'authenticated') return null;
 
   function handleJoin(e) {
     e.preventDefault();
