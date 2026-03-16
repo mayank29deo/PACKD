@@ -2,8 +2,20 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useApp, SPORT_COLORS } from '../../lib/AppContext';
 import BottomNav from '../../components/BottomNav';
+
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 const ALL_BADGES = [
   { id: 1, icon: '🏃', name: 'First 5K', desc: 'Completed your first 5K run', earned: true },
@@ -272,8 +284,62 @@ function NutritionTab() {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const { user, myActivityLog, packs, joinedPacks } = useApp();
   const [tab, setTab] = useState('Activity');
+  const [isPro, setIsPro] = useState(false);
+  const [proLoading, setProLoading] = useState(false);
+  const [proError, setProError] = useState('');
+
+  async function handleUpgradePro() {
+    if (!session) { router.push('/auth/login'); return; }
+    setProError('');
+    setProLoading(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) throw new Error('Could not load payment gateway');
+
+      const orderRes = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: 'pro_monthly', eventTitle: 'PACKD Pro — Monthly', amount: 299 }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error);
+
+      await new Promise((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          order_id:    orderData.orderId,
+          amount:      orderData.amount,
+          currency:    orderData.currency,
+          name:        'PACKD Pro',
+          description: 'Monthly Pro subscription',
+          prefill:     { email: session.user.email, name: session.user.name },
+          theme:       { color: '#E8451A' },
+          handler: async (response) => {
+            try {
+              const verifyRes = await fetch('/api/payment/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...response, eventId: 'pro_monthly' }),
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok) throw new Error(verifyData.error);
+              setIsPro(true);
+              resolve();
+            } catch (e) { reject(e); }
+          },
+          modal: { ondismiss: () => reject(new Error('cancelled')) },
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      if (err.message !== 'cancelled') setProError(err.message);
+    } finally {
+      setProLoading(false);
+    }
+  }
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
@@ -468,6 +534,49 @@ export default function ProfilePage() {
         )}
 
         {tab === 'Nutrition' && <NutritionTab />}
+      </div>
+
+      {/* ── Pro Upgrade Card ── */}
+      <div className="max-w-lg mx-auto px-4 pb-28">
+        {isPro ? (
+          <div className="packd-card p-4 flex items-center gap-3">
+            <span className="text-2xl">⚡</span>
+            <div>
+              <p className="text-sm font-bold text-packd-orange">PACKD Pro — Active</p>
+              <p className="text-xs text-packd-gray">Thanks for supporting PACKD!</p>
+            </div>
+          </div>
+        ) : (
+          <div className="packd-card p-5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-packd-orange/8 to-transparent pointer-events-none" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs font-bold text-packd-gray uppercase tracking-widest mb-0.5">Current Plan</p>
+                  <p className="text-base font-black text-white">Free</p>
+                </div>
+                <span className="text-2xl">🆓</span>
+              </div>
+              <div className="space-y-1.5 mb-4">
+                {['Unlimited event RSVPs', 'AI Calorie Scanner', 'Pack communities', '⚡ Priority support', '⚡ Exclusive Pro badge', '⚡ Advanced analytics'].map((f, i) => (
+                  <div key={f} className={`flex items-center gap-2 text-xs ${i < 3 ? 'text-packd-text' : 'text-packd-gray'}`}>
+                    <span className={i < 3 ? 'text-packd-green' : 'text-packd-border'}>✓</span>
+                    {f}
+                  </div>
+                ))}
+              </div>
+              {proError && <p className="text-xs text-red-400 mb-2">{proError}</p>}
+              <button
+                onClick={handleUpgradePro}
+                disabled={proLoading}
+                className="w-full packd-btn-primary py-3 text-sm orange-glow"
+              >
+                {proLoading ? 'Opening checkout…' : 'Upgrade to Pro — ₹299/mo'}
+              </button>
+              <p className="text-[10px] text-packd-gray text-center mt-2">Cancel anytime · Secure payment via Razorpay</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <BottomNav />

@@ -336,10 +336,6 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-white">Email</p>
               <p className="text-xs text-packd-gray">{user.email}</p>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-sm font-medium text-white">Plan</p>
-              <p className="text-xs text-packd-orange font-semibold">Free · Upgrade to Pro →</p>
-            </div>
           </div>
         </div>
 
