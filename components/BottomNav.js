@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 
 /** Home — V-formation pack mark (3 dots + motion trails + connecting V-lines) */
 function HomeIcon({ active }) {
-  const c = active ? '#E8451A' : 'currentColor';
+  const c = 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="4.5" r="2.2" fill={c} />
@@ -23,8 +23,8 @@ function HomeIcon({ active }) {
 }
 
 /** Explore — compass rose: outer ring + filled north arrow + faded south + centre dot */
-function ExploreIcon({ active }) {
-  const c = active ? '#E8451A' : 'currentColor';
+function ExploreIcon() {
+  const c = 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="9" stroke={c} strokeWidth="1.6" />
@@ -44,16 +44,16 @@ function ExploreIcon({ active }) {
 function CreateIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <line x1="12" y1="4" x2="12" y2="20" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
-      <line x1="4" y1="12" x2="20" y2="12" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx="18.5" cy="5.5" r="2" fill="white" opacity="0.6" />
+      <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx="18.5" cy="5.5" r="2" fill="currentColor" opacity="0.6" />
     </svg>
   );
 }
 
 /** Calorie Tracker — apple silhouette with a small leaf and a lightning bolt */
 function CalorieIcon({ active }) {
-  const c = active ? '#E8451A' : 'currentColor';
+  const c = 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       {/* Apple body */}
@@ -71,7 +71,7 @@ function CalorieIcon({ active }) {
 
 /** Pack tab — equilateral triangle of nodes connected by lines (network/crew) */
 function PackIcon({ active }) {
-  const c = active ? '#E8451A' : 'currentColor';
+  const c = 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <line x1="12" y1="4.5" x2="4.5" y2="18" stroke={c} strokeWidth="1.4" strokeLinecap="round" opacity="0.45" />
@@ -87,8 +87,8 @@ function PackIcon({ active }) {
 }
 
 /** Me — minimal person: solid head circle + open-arc shoulders */
-function MeIcon({ active }) {
-  const c = active ? '#E8451A' : 'currentColor';
+function MeIcon() {
+  const c = 'currentColor';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       {/* Head */}
@@ -131,7 +131,7 @@ export default function BottomNav() {
               }`}
             >
               {fab ? (
-                <span className="bg-packd-orange rounded-full w-11 h-11 flex items-center justify-center -mt-5 shadow-lg shadow-packd-orange/30">
+                <span className="fab-btn bg-packd-orange text-white rounded-full w-11 h-11 flex items-center justify-center -mt-5 shadow-lg shadow-packd-orange/30">
                   <Icon />
                 </span>
               ) : (

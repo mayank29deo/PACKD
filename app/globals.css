@@ -225,6 +225,9 @@ html.forest .card-hover:hover {
     0 4px 32px rgba(0, 0, 0, 0.5);
 }
 
+/* FAB: dark icon on neon-green button */
+html.forest .fab-btn { color: rgb(6 6 6); }
+
 /* Scrollbar: green glow */
 html.forest ::-webkit-scrollbar-thumb {
   background: rgba(0, 213, 99, 0.25);
@@ -303,6 +306,9 @@ html.mono .card-hover:hover {
     0 0 20px rgba(255, 255, 255, 0.05),
     0 4px 32px rgba(0, 0, 0, 0.6);
 }
+
+/* FAB: dark icon on white button */
+html.mono .fab-btn { color: rgb(7 7 7); }
 
 /* Scrollbar: white glint */
 html.mono ::-webkit-scrollbar-thumb {
