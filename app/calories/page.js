@@ -630,7 +630,9 @@ export default function CaloriesPage() {
   const isLoggedIn     = !!session?.user;
   const sessionLoading = status === 'loading';
 
-  const fileRef = useRef(null);
+  const fileRef        = useRef(null);
+  const mediaRecRef    = useRef(null);
+  const audioChunksRef = useRef([]);
 
   const [profile,        setProfile]        = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -641,13 +643,23 @@ export default function CaloriesPage() {
   const [insights,       setInsights]       = useState(null);
   const [insightsLoading,setInsightsLoading]= useState(false);
 
-  // Scan state
+  // Scan mode: 'photo' | 'voice'
+  const [scanMode,   setScanMode]   = useState('photo');
+
+  // Photo scan state
   const [preview,    setPreview]    = useState(null);
   const [imageData,  setImageData]  = useState(null);
   const [mimeType,   setMimeType]   = useState(null);
   const [scanLoading,setScanLoading]= useState(false);
   const [result,     setResult]     = useState(null);
   const [scanError,  setScanError]  = useState(null);
+
+  // Voice state
+  const [isRecording,   setIsRecording]   = useState(false);
+  const [recordSecs,    setRecordSecs]    = useState(0);
+  const [voiceLoading,  setVoiceLoading]  = useState(false);
+  const [voiceResult,   setVoiceResult]   = useState(null);   // { transcript, data }
+  const [voiceError,    setVoiceError]    = useState(null);
 
   // Load profile on mount
   useEffect(() => {
@@ -741,6 +753,92 @@ export default function CaloriesPage() {
     setPreview(null); setImageData(null); setMimeType(null);
     setResult(null); setScanError(null);
     if (fileRef.current) fileRef.current.value = '';
+  }
+
+  // ── Voice recording ──────────────────────────────────────────────────────────
+  async function startRecording() {
+    setVoiceError(null); setVoiceResult(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        await submitVoice(blob, mimeType);
+      };
+
+      mediaRecRef.current = recorder;
+      recorder.start(250); // collect chunks every 250ms
+      setIsRecording(true);
+      setRecordSecs(0);
+
+      // Tick counter
+      const tick = setInterval(() => {
+        setRecordSecs(s => {
+          if (s >= 59) { stopRecording(); clearInterval(tick); return s; }
+          return s + 1;
+        });
+      }, 1000);
+      mediaRecRef.current._tick = tick;
+    } catch {
+      setVoiceError('Microphone access denied. Please allow microphone permissions.');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+      clearInterval(mediaRecRef.current._tick);
+      mediaRecRef.current.stop();
+      setIsRecording(false);
+    }
+  }
+
+  async function submitVoice(blob, audioMime) {
+    setVoiceLoading(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const res  = await fetch('/api/calories/voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioData: base64, mimeType: audioMime }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Voice analysis failed');
+
+      setVoiceResult(json);
+      if (isLoggedIn) {
+        const newLog = {
+          id:             'local_v_' + Date.now(),
+          meal_name:      json.data.meal,
+          total_calories: json.data.totalCalories,
+          protein_g:      json.data.macros?.protein || 0,
+          carbs_g:        json.data.macros?.carbs   || 0,
+          fat_g:          json.data.macros?.fat     || 0,
+          logged_at:      new Date().toISOString(),
+        };
+        setLogs(prev => [newLog, ...prev]);
+        setInsights(null);
+      }
+    } catch (err) {
+      setVoiceError(err.message);
+    } finally {
+      setVoiceLoading(false);
+    }
+  }
+
+  function resetVoice() {
+    setVoiceResult(null); setVoiceError(null);
+    setIsRecording(false); setRecordSecs(0);
   }
 
   // Derived
@@ -841,41 +939,237 @@ export default function CaloriesPage() {
         {activeTab === 'scan' && (
           <div className="px-4 py-4 space-y-4">
 
-            {!preview ? (
-              <button onClick={() => fileRef.current?.click()}
-                className="w-full packd-card border-2 border-dashed border-packd-border hover:border-packd-orange transition-colors p-10 flex flex-col items-center gap-4 text-packd-gray hover:text-packd-orange">
-                <div className="w-16 h-16 rounded-2xl bg-packd-orange/10 flex items-center justify-center text-packd-orange">
-                  <ScanIcon size={30}/>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-packd-text">Snap or upload a food photo</p>
-                  <p className="text-xs text-packd-gray mt-1">JPG, PNG, WebP · Meals, snacks, anything</p>
-                </div>
-                <span className="text-xs bg-packd-orange/10 text-packd-orange px-3 py-1.5 rounded-full font-semibold">
-                  Powered by AI ✦
-                </span>
+            {/* Mode toggle: Photo / Voice */}
+            <div className="flex bg-packd-card border border-packd-border rounded-xl p-1 gap-1">
+              <button onClick={() => { setScanMode('photo'); resetVoice(); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  scanMode === 'photo'
+                    ? 'bg-packd-orange text-white'
+                    : 'text-packd-gray hover:text-packd-text'
+                }`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                  <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M9 5l1.5-2h3L15 5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                </svg>
+                Photo
               </button>
-            ) : (
-              <div className="relative rounded-2xl overflow-hidden">
-                <img src={preview} alt="Food preview" className="w-full max-h-72 object-cover"/>
-                <button onClick={resetScan}
-                  className="absolute top-3 right-3 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors">
-                  ✕
-                </button>
+              <button onClick={() => { setScanMode('voice'); resetScan(); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  scanMode === 'voice'
+                    ? 'bg-packd-orange text-white'
+                    : 'text-packd-gray hover:text-packd-text'
+                }`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M12 18v4M9 22h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+                Voice
+              </button>
+            </div>
+
+            {/* ── VOICE MODE ── */}
+            {scanMode === 'voice' && (
+              <div className="space-y-4">
+                {!voiceResult && !voiceLoading && (
+                  <div className="packd-card p-8 flex flex-col items-center gap-5">
+                    {/* Mic button */}
+                    <button
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all ${
+                        isRecording
+                          ? 'bg-red-500 shadow-lg shadow-red-500/40'
+                          : 'bg-packd-orange/15 border-2 border-packd-orange hover:bg-packd-orange/25'
+                      }`}>
+                      {isRecording && (
+                        <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping"/>
+                      )}
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                        className={isRecording ? 'text-white' : 'text-packd-orange'}>
+                        <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+                        <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                        <path d="M12 18v4M9 22h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+
+                    {isRecording ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
+                          <span className="text-sm font-bold text-red-400">Recording</span>
+                          <span className="text-sm font-mono text-red-400">
+                            0:{String(recordSecs).padStart(2, '0')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-packd-gray text-center mt-1">
+                          Tap to stop when done speaking
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-white">Describe what you ate</p>
+                        <p className="text-xs text-packd-gray mt-1 leading-relaxed max-w-xs">
+                          e.g. &quot;I had two rotis with dal, a cup of curd and a banana&quot;
+                        </p>
+                        <span className="inline-block mt-3 text-xs bg-packd-orange/10 text-packd-orange px-3 py-1.5 rounded-full font-semibold">
+                          Powered by Whisper AI ✦
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {voiceLoading && (
+                  <div className="packd-card p-8 flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 rounded-full border-2 border-packd-orange border-t-transparent animate-spin"/>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-white">Transcribing your voice…</p>
+                      <p className="text-xs text-packd-gray mt-1">Then estimating calories</p>
+                    </div>
+                  </div>
+                )}
+
+                {voiceError && (
+                  <div className="packd-card p-4 border border-red-400/30 bg-red-500/5">
+                    <p className="text-sm font-semibold text-red-400">Voice analysis failed</p>
+                    <p className="text-xs text-packd-gray mt-1">{voiceError}</p>
+                    <button onClick={resetVoice} className="text-xs text-packd-orange mt-2 hover:underline">Try again</button>
+                  </div>
+                )}
+
+                {voiceResult && (
+                  <div className="space-y-3">
+                    {/* Transcript card */}
+                    <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
+                      <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">You said</p>
+                      <p className="text-sm text-packd-text italic leading-relaxed">&quot;{voiceResult.transcript}&quot;</p>
+                    </div>
+
+                    {/* Calorie result — same card layout as photo */}
+                    <div className="packd-card p-5">
+                      <div className="flex items-start justify-between mb-1 gap-2">
+                        <p className="text-sm font-bold text-white leading-tight">{voiceResult.data.meal}</p>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 bg-amber-500/15 text-amber-400 border-amber-500/30">
+                          Ballpark estimate
+                        </span>
+                      </div>
+                      {voiceResult.data.servingNote && (
+                        <p className="text-xs text-packd-gray mb-4">{voiceResult.data.servingNote}</p>
+                      )}
+                      <div className="flex items-end gap-2 mb-5">
+                        <span className="text-5xl font-black text-packd-orange leading-none">
+                          {voiceResult.data.totalCalories}
+                        </span>
+                        <span className="text-packd-gray text-sm pb-1">kcal</span>
+                      </div>
+                      <div className="space-y-2.5">
+                        {(() => {
+                          const m = voiceResult.data.macros;
+                          const mx = Math.max(m.protein, m.carbs, m.fat, 1);
+                          return [
+                            { label: 'Protein', grams: m.protein, color: 'bg-packd-orange' },
+                            { label: 'Carbs',   grams: m.carbs,   color: 'bg-amber-500' },
+                            { label: 'Fat',     grams: m.fat,     color: 'bg-emerald-500' },
+                          ].map(({ label, grams, color }) => (
+                            <div key={label} className="flex items-center gap-2">
+                              <span className="text-[11px] text-packd-gray w-14 flex-shrink-0">{label}</span>
+                              <div className="flex-1 h-2 rounded-full bg-packd-border overflow-hidden">
+                                <div className={`h-full rounded-full ${color}`}
+                                  style={{ width: `${(grams / mx) * 100}%`, transition: 'width 0.7s ease' }}/>
+                              </div>
+                              <span className="text-[11px] font-semibold text-packd-text w-10 text-right">{grams}g</span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+
+                    {voiceResult.data.items?.length > 0 && (
+                      <div className="packd-card p-4">
+                        <p className="text-[10px] font-bold text-packd-gray uppercase tracking-widest mb-3">Breakdown</p>
+                        <div className="space-y-2.5">
+                          {voiceResult.data.items.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm text-white">{item.name}</p>
+                                {item.portion && <p className="text-[11px] text-packd-gray">{item.portion}</p>}
+                              </div>
+                              <span className="text-sm font-semibold text-packd-orange">{item.calories} kcal</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {voiceResult.data.athleteTip && (
+                      <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
+                        <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">Athlete Tip</p>
+                        <p className="text-sm text-packd-text leading-relaxed">{voiceResult.data.athleteTip}</p>
+                      </div>
+                    )}
+
+                    {isLoggedIn ? (
+                      <div className="packd-card p-3.5 border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2">
+                        <span className="text-emerald-400 font-bold">✓</span>
+                        <p className="text-xs text-emerald-400 font-semibold">Meal logged — check Today tab</p>
+                      </div>
+                    ) : (
+                      <div className="packd-card p-3.5 border border-packd-border/60 flex items-center justify-between gap-2">
+                        <p className="text-xs text-packd-gray">Sign in to save your meal history</p>
+                        <Link href="/auth/login" className="text-xs text-packd-orange font-semibold flex-shrink-0">Sign in →</Link>
+                      </div>
+                    )}
+
+                    <button onClick={resetVoice} className="w-full packd-btn-ghost py-3 text-sm">
+                      Record another meal
+                    </button>
+                    <p className="text-center text-[10px] text-packd-gray pb-1">
+                      Ballpark estimates based on verbal description — actual values may vary.
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* ── PHOTO MODE ── */}
+            {scanMode === 'photo' && (
+              !preview ? (
+                <button onClick={() => fileRef.current?.click()}
+                  className="w-full packd-card border-2 border-dashed border-packd-border hover:border-packd-orange transition-colors p-10 flex flex-col items-center gap-4 text-packd-gray hover:text-packd-orange">
+                  <div className="w-16 h-16 rounded-2xl bg-packd-orange/10 flex items-center justify-center text-packd-orange">
+                    <ScanIcon size={30}/>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-packd-text">Snap or upload a food photo</p>
+                    <p className="text-xs text-packd-gray mt-1">JPG, PNG, WebP · Meals, snacks, anything</p>
+                  </div>
+                  <span className="text-xs bg-packd-orange/10 text-packd-orange px-3 py-1.5 rounded-full font-semibold">
+                    Powered by AI ✦
+                  </span>
+                </button>
+              ) : (
+                <div className="relative rounded-2xl overflow-hidden">
+                  <img src={preview} alt="Food preview" className="w-full max-h-72 object-cover"/>
+                  <button onClick={resetScan}
+                    className="absolute top-3 right-3 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors">
+                    ✕
+                  </button>
+                </div>
+              )
             )}
 
             <input ref={fileRef} type="file" accept="image/*" capture="environment"
               className="hidden" onChange={handleFile}/>
 
-            {imageData && !result && !scanLoading && (
+            {scanMode === 'photo' && imageData && !result && !scanLoading && (
               <button onClick={analyse}
                 className="w-full packd-btn-primary py-4 text-sm flex items-center justify-center gap-2">
                 <ScanIcon size={18}/> Analyse Calories
               </button>
             )}
 
-            {scanLoading && (
+            {scanMode === 'photo' && scanLoading && (
               <div className="packd-card p-8 flex flex-col items-center gap-4">
                 <div className="w-12 h-12 rounded-full border-2 border-packd-orange border-t-transparent animate-spin"/>
                 <div className="text-center">
@@ -885,7 +1179,7 @@ export default function CaloriesPage() {
               </div>
             )}
 
-            {scanError && (
+            {scanMode === 'photo' && scanError && (
               <div className="packd-card p-4 border border-red-400/30 bg-red-500/5">
                 <p className="text-sm font-semibold text-red-400">Analysis failed</p>
                 <p className="text-xs text-packd-gray mt-1">{scanError}</p>
@@ -893,7 +1187,7 @@ export default function CaloriesPage() {
               </div>
             )}
 
-            {result && (
+            {scanMode === 'photo' && result && (
               <div className="space-y-3">
 
                 <div className="packd-card p-5">
