@@ -1,4 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { createServerSupabase } from '@/lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -21,15 +24,15 @@ Respond with ONLY this exact JSON structure (no extra text):
   "items": [
     { "name": "item name", "calories": 200, "portion": "1 cup" }
   ],
-  "athleteTip": "One concise athlete-focused tip about this meal — e.g. good pre/post workout, needs more protein, etc."
+  "athleteTip": "One concise athlete-focused tip about this meal"
 }
 
 Rules:
 - totalCalories should be a realistic integer
 - macros are in grams
-- confidence is "high", "medium", or "low" depending on how clearly you can see the food
+- confidence is "high", "medium", or "low"
 - items list the main components (max 5)
-- If you genuinely cannot identify food in the image, set meal to "Unknown food" and confidence to "low" with your best guess`;
+- If you cannot identify food, set meal to "Unknown food" and confidence to "low"`;
 
 export async function POST(request) {
   try {
@@ -47,36 +50,44 @@ export async function POST(request) {
       model: 'claude-opus-4-6',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType,
-                data: imageData,
-              },
-            },
-            {
-              type: 'text',
-              text: USER_PROMPT,
-            },
-          ],
-        },
-      ],
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageData } },
+          { type: 'text', text: USER_PROMPT },
+        ],
+      }],
     });
 
     const rawText = response.content[0]?.text || '';
-
-    // Extract JSON from response — handle cases where model adds extra text
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return Response.json({ error: 'Could not parse nutritional data' }, { status: 500 });
     }
 
     const data = JSON.parse(jsonMatch[0]);
+
+    // Save to DB if user is logged in (non-fatal if it fails)
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        const supabase = createServerSupabase();
+        await supabase.from('meal_logs').insert({
+          user_email:    session.user.email,
+          meal_name:     data.meal,
+          total_calories: data.totalCalories,
+          protein_g:     data.macros?.protein || 0,
+          carbs_g:       data.macros?.carbs   || 0,
+          fat_g:         data.macros?.fat     || 0,
+          items:         data.items   || [],
+          confidence:    data.confidence,
+          serving_note:  data.servingNote,
+          athlete_tip:   data.athleteTip,
+        });
+      }
+    } catch (dbErr) {
+      console.warn('Meal log save failed (non-fatal):', dbErr.message);
+    }
 
     return Response.json({ success: true, data });
   } catch (err) {
