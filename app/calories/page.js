@@ -660,6 +660,7 @@ export default function CaloriesPage() {
   const [voiceLoading,  setVoiceLoading]  = useState(false);
   const [voiceResult,   setVoiceResult]   = useState(null);   // { transcript, data }
   const [voiceError,    setVoiceError]    = useState(null);
+  const [voiceLang,     setVoiceLang]     = useState('en-IN');
 
   // Load profile on mount
   useEffect(() => {
@@ -765,7 +766,7 @@ export default function CaloriesPage() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang            = 'en-IN';
+    recognition.lang            = voiceLang;
     recognition.interimResults  = false;
     recognition.maxAlternatives = 1;
     recognition.continuous      = false;
@@ -979,6 +980,30 @@ export default function CaloriesPage() {
               <div className="space-y-4">
                 {!voiceResult && !voiceLoading && (
                   <div className="packd-card p-8 flex flex-col items-center gap-5">
+                    {/* Language selector */}
+                    {!isRecording && (
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {[
+                          { code: 'en-IN', label: 'EN' },
+                          { code: 'hi-IN', label: 'हिं' },
+                          { code: 'ta-IN', label: 'தமிழ்' },
+                          { code: 'te-IN', label: 'తెలుగు' },
+                          { code: 'mr-IN', label: 'मराठी' },
+                          { code: 'bn-IN', label: 'বাং' },
+                        ].map(({ code, label }) => (
+                          <button
+                            key={code}
+                            onClick={() => setVoiceLang(code)}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                              voiceLang === code
+                                ? 'bg-packd-orange text-white'
+                                : 'bg-packd-orange/10 text-packd-orange border border-packd-orange/30 hover:bg-packd-orange/20'
+                            }`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {/* Mic button */}
                     <button
                       onClick={isRecording ? stopRecording : startRecording}
@@ -1018,7 +1043,7 @@ export default function CaloriesPage() {
                           e.g. &quot;I had two rotis with dal, a cup of curd and a banana&quot;
                         </p>
                         <span className="inline-block mt-3 text-xs bg-packd-orange/10 text-packd-orange px-3 py-1.5 rounded-full font-semibold">
-                          Powered by Whisper AI ✦
+                          Powered by AI ✦
                         </span>
                       </div>
                     )}
@@ -1029,8 +1054,8 @@ export default function CaloriesPage() {
                   <div className="packd-card p-8 flex flex-col items-center gap-4">
                     <div className="w-12 h-12 rounded-full border-2 border-packd-orange border-t-transparent animate-spin"/>
                     <div className="text-center">
-                      <p className="text-sm font-semibold text-white">Transcribing your voice…</p>
-                      <p className="text-xs text-packd-gray mt-1">Then estimating calories</p>
+                      <p className="text-sm font-semibold text-white">Analysing your meal…</p>
+                      <p className="text-xs text-packd-gray mt-1">Estimating calories & macros</p>
                     </div>
                   </div>
                 )}
