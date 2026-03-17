@@ -110,7 +110,7 @@ export default function LandingPage() {
         setDescIdx((i) => (i + 1) % HERO_DESCS.length);
         setDescVisible(true);
       }, 500);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
