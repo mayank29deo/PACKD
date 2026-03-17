@@ -86,6 +86,11 @@ function CounterStat({ value, label, icon, delay }) {
   );
 }
 
+const HERO_DESCS = [
+  'The operating system for your active life. Discover athletes, join packs, plan events, swipe through opportunities — one app for every sport, every level.',
+  'Track calories effortlessly — snap a photo of your meal or record your voice and let AI analyse it instantly. Smart insights to fuel your performance.',
+];
+
 export default function LandingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -93,8 +98,21 @@ export default function LandingPage() {
   const [joined, setJoined] = useState(false);
   const [activeSport, setActiveSport] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [descIdx, setDescIdx] = useState(0);
+  const [descVisible, setDescVisible] = useState(true);
 
   useEffect(() => { setTimeout(() => setMounted(true), 100); }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDescVisible(false);
+      setTimeout(() => {
+        setDescIdx((i) => (i + 1) % HERO_DESCS.length);
+        setDescVisible(true);
+      }, 250);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Redirect signed-in users straight to the feed
   useEffect(() => {
@@ -154,8 +172,9 @@ export default function LandingPage() {
             <span className="text-gradient">Own Your Sport.</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-packd-gray max-w-2xl mx-auto leading-relaxed mb-8">
-            The operating system for your active life. Discover athletes, join packs, plan events, swipe through opportunities — one app for every sport, every level.
+          <p className="text-lg md:text-xl text-packd-gray max-w-2xl mx-auto leading-relaxed mb-8 min-h-[3.5rem] flex items-center justify-center"
+            style={{ transition: 'opacity 0.25s ease', opacity: descVisible ? 1 : 0 }}>
+            {HERO_DESCS[descIdx]}
           </p>
 
           {/* Sport pills — interactive */}
