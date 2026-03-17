@@ -109,8 +109,8 @@ export default function LandingPage() {
       setTimeout(() => {
         setDescIdx((i) => (i + 1) % HERO_DESCS.length);
         setDescVisible(true);
-      }, 250);
-    }, 1500);
+      }, 500);
+    }, 2500);
     return () => clearInterval(interval);
   }, []);
 
@@ -173,7 +173,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-packd-gray max-w-2xl mx-auto leading-relaxed mb-8 min-h-[3.5rem] flex items-center justify-center"
-            style={{ transition: 'opacity 0.25s ease', opacity: descVisible ? 1 : 0 }}>
+            style={{ transition: 'opacity 0.5s ease', opacity: descVisible ? 1 : 0 }}>
             {HERO_DESCS[descIdx]}
           </p>
 
