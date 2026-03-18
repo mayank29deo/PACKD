@@ -13,14 +13,51 @@ const REVERIE_LANG_MAP = {
   'te-IN': 'te', 'te': 'te',
 };
 
+// Ensure the audio buffer has proper RIFF/WAV headers.
+// expo-av LINEARPCM on iOS sometimes produces raw PCM without headers.
+function ensureWavHeaders(buf, sampleRate = 16000, channels = 1, bitsPerSample = 16) {
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'RIFF') return buf; // already WAV
+  // Prepend RIFF/WAV header (44 bytes)
+  const header = Buffer.alloc(44);
+  const dataSize = buf.length;
+  header.write('RIFF', 0, 'ascii');
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8, 'ascii');
+  header.write('fmt ', 12, 'ascii');
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);                                    // PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * channels * bitsPerSample / 8, 28);
+  header.writeUInt16LE(channels * bitsPerSample / 8, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36, 'ascii');
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, buf]);
+}
+
 async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
-  const audioBuffer = Buffer.from(audioBase64, 'base64');
-  // Always use .wav extension — Reverie STT file API requires PCM/WAV
-  const ext = mimeType === 'audio/wav' ? 'wav' : (mimeType.split('/')[1]?.split(';')[0] || 'wav');
+  let audioBuffer = Buffer.from(audioBase64, 'base64');
   const revLang = REVERIE_LANG_MAP[lang] || 'en';
 
+  // ── Debug logging (visible in Vercel function logs) ──────────────────────
+  const header4 = audioBuffer.length >= 4 ? audioBuffer.slice(0, 4).toString('ascii') : 'N/A';
+  console.log(`[STT] received: ${audioBuffer.length} bytes | mime: ${mimeType} | lang: ${revLang} | header: "${header4}"`);
+
+  // Ensure proper WAV headers for PCM audio
+  if (mimeType === 'audio/wav') {
+    audioBuffer = ensureWavHeaders(audioBuffer);
+    console.log(`[STT] after header fix: ${audioBuffer.length} bytes | starts: "${audioBuffer.slice(0, 4).toString('ascii')}"`);
+  }
+
+  if (audioBuffer.length < 100) {
+    throw new Error(`Audio file too small (${audioBuffer.length} bytes) — recording may have failed`);
+  }
+
   const form = new FormData();
-  form.append('audio_file', new Blob([audioBuffer], { type: mimeType }), `recording.${ext}`);
+  form.append('audio_file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
+
+  console.log(`[STT] → Reverie | appId: ${process.env.REVERIE_APP_ID} | lang: ${revLang} | size: ${audioBuffer.length}`);
 
   const response = await fetch('https://revapi.reverieinc.com/', {
     method: 'POST',
@@ -34,12 +71,20 @@ async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
     body: form,
   });
 
+  const responseText = await response.text();
+  console.log(`[STT] ← Reverie | status: ${response.status} | body: ${responseText}`);
+
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Transcription failed: ${response.status} ${errText}`);
+    throw new Error(`Reverie ${response.status}: ${responseText}`);
   }
 
-  const result = await response.json();
+  let result;
+  try { result = JSON.parse(responseText); } catch { throw new Error(`Reverie bad JSON: ${responseText}`); }
+
+  if (!result.success) {
+    throw new Error(`Reverie STT failed — cause: "${result.cause || 'unknown'}" | Check Vercel logs for details`);
+  }
+
   return result.text?.trim() || result.display_text?.trim() || '';
 }
 
