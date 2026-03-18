@@ -13,27 +13,69 @@ const REVERIE_LANG_MAP = {
   'te-IN': 'te', 'te': 'te',
 };
 
-// Ensure the audio buffer has proper RIFF/WAV headers.
-// expo-av LINEARPCM on iOS sometimes produces raw PCM without headers.
-function ensureWavHeaders(buf, sampleRate = 16000, channels = 1, bitsPerSample = 16) {
-  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'RIFF') return buf; // already WAV
-  // Prepend RIFF/WAV header (44 bytes)
+// Parse a RIFF/WAV buffer → { fmt, pcmData } or null
+function parseWav(buf) {
+  if (buf.length < 12) return null;
+  if (buf.toString('ascii', 0, 4) !== 'RIFF') return null;
+  if (buf.toString('ascii', 8, 12) !== 'WAVE') return null;
+  let offset = 12, fmt = null, pcmData = null;
+  while (offset + 8 <= buf.length) {
+    const id       = buf.toString('ascii', offset, offset + 4);
+    const size     = buf.readUInt32LE(offset + 4);
+    const dataStart = offset + 8;
+    if (id === 'fmt ') {
+      fmt = {
+        audioFormat:  buf.readUInt16LE(dataStart),
+        numChannels:  buf.readUInt16LE(dataStart + 2),
+        sampleRate:   buf.readUInt32LE(dataStart + 4),
+        bitsPerSample: buf.readUInt16LE(dataStart + 14),
+      };
+      // WAVEFORMATEXTENSIBLE (0xFFFE): real format is in sub-format GUID bytes 0-1
+      if (fmt.audioFormat === 0xFFFE && size >= 40) {
+        fmt.audioFormat = buf.readUInt16LE(dataStart + 24);
+      }
+    } else if (id === 'data') {
+      pcmData = buf.slice(dataStart, dataStart + size);
+    }
+    offset = dataStart + size + (size % 2); // word-align
+  }
+  return (fmt && pcmData) ? { fmt, pcmData } : null;
+}
+
+// Convert IEEE-float-32 PCM → int16 PCM
+function floatToInt16(floatBuf) {
+  const samples = Math.floor(floatBuf.length / 4);
+  const out = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i++) {
+    const f = floatBuf.readFloatLE(i * 4);
+    out.writeInt16LE(Math.round(Math.max(-1, Math.min(1, f)) * 32767), i * 2);
+  }
+  return out;
+}
+
+// Build a minimal standard PCM WAV (format type 1)
+function buildPcmWav(pcm, sampleRate, channels, bitsPerSample) {
   const header = Buffer.alloc(44);
-  const dataSize = buf.length;
   header.write('RIFF', 0, 'ascii');
-  header.writeUInt32LE(36 + dataSize, 4);
+  header.writeUInt32LE(36 + pcm.length, 4);
   header.write('WAVE', 8, 'ascii');
   header.write('fmt ', 12, 'ascii');
   header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);                                    // PCM
+  header.writeUInt16LE(1, 20);                                      // PCM
   header.writeUInt16LE(channels, 22);
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(sampleRate * channels * bitsPerSample / 8, 28);
   header.writeUInt16LE(channels * bitsPerSample / 8, 32);
   header.writeUInt16LE(bitsPerSample, 34);
   header.write('data', 36, 'ascii');
-  header.writeUInt32LE(dataSize, 40);
-  return Buffer.concat([header, buf]);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+// Fallback: prepend WAV headers to raw PCM (no RIFF header present)
+function ensureWavHeaders(buf, sampleRate = 16000, channels = 1, bitsPerSample = 16) {
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'RIFF') return buf;
+  return buildPcmWav(buf, sampleRate, channels, bitsPerSample);
 }
 
 async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
@@ -44,10 +86,27 @@ async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
   const header4 = audioBuffer.length >= 4 ? audioBuffer.slice(0, 4).toString('ascii') : 'N/A';
   console.log(`[STT] received: ${audioBuffer.length} bytes | mime: ${mimeType} | lang: ${revLang} | header: "${header4}"`);
 
-  // Ensure proper WAV headers for PCM audio
+  // Normalise WAV → clean standard PCM WAV (format type 1)
+  // iOS LINEARPCM often produces WAVEFORMATEXTENSIBLE (0xFFFE) or float PCM (0x0003)
+  // which Reverie cannot decode — we parse and rebuild.
   if (mimeType === 'audio/wav') {
-    audioBuffer = ensureWavHeaders(audioBuffer);
-    console.log(`[STT] after header fix: ${audioBuffer.length} bytes | starts: "${audioBuffer.slice(0, 4).toString('ascii')}"`);
+    const parsed = parseWav(audioBuffer);
+    if (parsed) {
+      let { fmt, pcmData } = parsed;
+      console.log(`[STT] WAV fmt: type=${fmt.audioFormat} sr=${fmt.sampleRate} ch=${fmt.numChannels} bps=${fmt.bitsPerSample} pcmBytes=${pcmData.length}`);
+      // Convert float32 PCM → int16 if needed
+      if (fmt.audioFormat === 3 && fmt.bitsPerSample === 32) {
+        pcmData = floatToInt16(pcmData);
+        fmt = { ...fmt, audioFormat: 1, bitsPerSample: 16 };
+        console.log(`[STT] Converted float32 → int16 (${pcmData.length} bytes)`);
+      }
+      audioBuffer = buildPcmWav(pcmData, fmt.sampleRate, fmt.numChannels, fmt.bitsPerSample);
+      console.log(`[STT] Rebuilt clean PCM WAV: ${audioBuffer.length} bytes`);
+    } else {
+      // Not a valid RIFF file — treat as raw PCM and add headers
+      audioBuffer = ensureWavHeaders(audioBuffer);
+      console.log(`[STT] Added WAV headers: ${audioBuffer.length} bytes`);
+    }
   }
 
   if (audioBuffer.length < 100) {
