@@ -81,23 +81,18 @@ function ensureWavHeaders(buf, sampleRate = 16000, channels = 1, bitsPerSample =
 // ── STT provider 1: Groq Whisper ─────────────────────────────────────────────
 async function transcribeWithGroq(audioBuffer, lang) {
   if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
-  const isEnglish = !lang || lang.startsWith('en');
-  // For non-English: use 'translate' task → Whisper outputs English directly
-  // For English: use 'transcribe' normally
+  // Always use translate → output is always English, regardless of spoken language.
+  // This lets users speak any language and Claude always receives English for analysis.
   const groqLang = lang?.startsWith('hi') ? 'hi'
     : lang?.startsWith('ta') ? 'ta'
     : lang?.startsWith('te') ? 'te'
     : 'en';
-  const endpoint = isEnglish
-    ? 'https://api.groq.com/openai/v1/audio/transcriptions'
-    : 'https://api.groq.com/openai/v1/audio/translations';
   const form = new FormData();
   form.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
   form.append('model', 'whisper-large-v3');
-  if (isEnglish) form.append('language', groqLang);
   form.append('response_format', 'json');
-  console.log(`[STT] → Groq Whisper | task: ${isEnglish ? 'transcribe' : 'translate→en'} | lang: ${groqLang} | size: ${audioBuffer.length}`);
-  const res = await fetch(endpoint, {
+  console.log(`[STT] → Groq Whisper | task: translate→en | lang hint: ${groqLang} | size: ${audioBuffer.length}`);
+  const res = await fetch('https://api.groq.com/openai/v1/audio/translations', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
     body: form,
