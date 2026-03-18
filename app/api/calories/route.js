@@ -98,6 +98,12 @@ export async function POST(request) {
     if (err instanceof Anthropic.RateLimitError) {
       return Response.json({ error: 'Rate limited — try again shortly' }, { status: 429 });
     }
+    if (err instanceof Anthropic.APIStatusError && err.status === 529) {
+      return Response.json({ error: 'AI is busy right now — please try again in a moment' }, { status: 503 });
+    }
+    if (err?.error?.type === 'overloaded_error') {
+      return Response.json({ error: 'AI is busy right now — please try again in a moment' }, { status: 503 });
+    }
     return Response.json({ error: err.message || 'Analysis failed' }, { status: 500 });
   }
 }
