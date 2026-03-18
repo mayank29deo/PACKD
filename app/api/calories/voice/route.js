@@ -78,47 +78,42 @@ function ensureWavHeaders(buf, sampleRate = 16000, channels = 1, bitsPerSample =
   return buildPcmWav(buf, sampleRate, channels, bitsPerSample);
 }
 
-async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
-  let audioBuffer = Buffer.from(audioBase64, 'base64');
+// ── STT provider 1: Groq Whisper ─────────────────────────────────────────────
+async function transcribeWithGroq(audioBuffer, lang) {
+  if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
+  // Groq Whisper accepts WAV directly
+  const groqLang = lang?.startsWith('hi') ? 'hi'
+    : lang?.startsWith('ta') ? 'ta'
+    : lang?.startsWith('te') ? 'te'
+    : 'en';
+  const form = new FormData();
+  form.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('language', groqLang);
+  form.append('response_format', 'json');
+  console.log(`[STT] → Groq Whisper | lang: ${groqLang} | size: ${audioBuffer.length}`);
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+    body: form,
+  });
+  const text = await res.text();
+  console.log(`[STT] ← Groq | status: ${res.status} | body: ${text}`);
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${text}`);
+  const json = JSON.parse(text);
+  return json.text?.trim() || '';
+}
+
+// ── STT provider 2: Reverie ───────────────────────────────────────────────────
+async function transcribeWithReverie(audioBuffer, lang) {
+  if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
+    throw new Error('Reverie credentials not configured');
+  }
   const revLang = REVERIE_LANG_MAP[lang] || 'en';
-
-  // ── Debug logging (visible in Vercel function logs) ──────────────────────
-  const header4 = audioBuffer.length >= 4 ? audioBuffer.slice(0, 4).toString('ascii') : 'N/A';
-  console.log(`[STT] received: ${audioBuffer.length} bytes | mime: ${mimeType} | lang: ${revLang} | header: "${header4}"`);
-
-  // Normalise WAV → clean standard PCM WAV (format type 1)
-  // iOS LINEARPCM often produces WAVEFORMATEXTENSIBLE (0xFFFE) or float PCM (0x0003)
-  // which Reverie cannot decode — we parse and rebuild.
-  if (mimeType === 'audio/wav') {
-    const parsed = parseWav(audioBuffer);
-    if (parsed) {
-      let { fmt, pcmData } = parsed;
-      console.log(`[STT] WAV fmt: type=${fmt.audioFormat} sr=${fmt.sampleRate} ch=${fmt.numChannels} bps=${fmt.bitsPerSample} pcmBytes=${pcmData.length}`);
-      // Convert float32 PCM → int16 if needed
-      if (fmt.audioFormat === 3 && fmt.bitsPerSample === 32) {
-        pcmData = floatToInt16(pcmData);
-        fmt = { ...fmt, audioFormat: 1, bitsPerSample: 16 };
-        console.log(`[STT] Converted float32 → int16 (${pcmData.length} bytes)`);
-      }
-      audioBuffer = buildPcmWav(pcmData, fmt.sampleRate, fmt.numChannels, fmt.bitsPerSample);
-      console.log(`[STT] Rebuilt clean PCM WAV: ${audioBuffer.length} bytes`);
-    } else {
-      // Not a valid RIFF file — treat as raw PCM and add headers
-      audioBuffer = ensureWavHeaders(audioBuffer);
-      console.log(`[STT] Added WAV headers: ${audioBuffer.length} bytes`);
-    }
-  }
-
-  if (audioBuffer.length < 100) {
-    throw new Error(`Audio file too small (${audioBuffer.length} bytes) — recording may have failed`);
-  }
-
   const form = new FormData();
   form.append('audio_file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
-
-  console.log(`[STT] → Reverie | appId: ${process.env.REVERIE_APP_ID} | lang: ${revLang} | size: ${audioBuffer.length}`);
-
-  const response = await fetch('https://revapi.reverieinc.com/', {
+  console.log(`[STT] → Reverie | lang: ${revLang} | size: ${audioBuffer.length}`);
+  const res = await fetch('https://revapi.reverieinc.com/', {
     method: 'POST',
     headers: {
       'REV-API-KEY': process.env.REVERIE_API_KEY,
@@ -129,22 +124,61 @@ async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
     },
     body: form,
   });
-
-  const responseText = await response.text();
-  console.log(`[STT] ← Reverie | status: ${response.status} | body: ${responseText}`);
-
-  if (!response.ok) {
-    throw new Error(`Reverie ${response.status}: ${responseText}`);
-  }
-
+  const text = await res.text();
+  console.log(`[STT] ← Reverie | status: ${res.status} | body: ${text}`);
+  if (!res.ok) throw new Error(`Reverie ${res.status}: ${text}`);
   let result;
-  try { result = JSON.parse(responseText); } catch { throw new Error(`Reverie bad JSON: ${responseText}`); }
+  try { result = JSON.parse(text); } catch { throw new Error(`Reverie bad JSON: ${text}`); }
+  if (!result.success) throw new Error(`Reverie failed: ${result.cause || 'unknown'}`);
+  return result.text?.trim() || result.display_text?.trim() || '';
+}
 
-  if (!result.success) {
-    throw new Error(`Reverie STT failed — cause: "${result.cause || 'unknown'}" | Check Vercel logs for details`);
+// ── Main transcription: Groq → Reverie fallback ───────────────────────────────
+async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
+  let audioBuffer = Buffer.from(audioBase64, 'base64');
+
+  const header4 = audioBuffer.length >= 4 ? audioBuffer.slice(0, 4).toString('ascii') : 'N/A';
+  console.log(`[STT] received: ${audioBuffer.length} bytes | mime: ${mimeType} | lang: ${lang} | header: "${header4}"`);
+
+  // Normalise WAV to clean standard PCM WAV (format type 1)
+  if (mimeType === 'audio/wav') {
+    const parsed = parseWav(audioBuffer);
+    if (parsed) {
+      let { fmt, pcmData } = parsed;
+      console.log(`[STT] WAV fmt: type=${fmt.audioFormat} sr=${fmt.sampleRate} ch=${fmt.numChannels} bps=${fmt.bitsPerSample}`);
+      if (fmt.audioFormat === 3 && fmt.bitsPerSample === 32) {
+        pcmData = floatToInt16(pcmData);
+        fmt = { ...fmt, audioFormat: 1, bitsPerSample: 16 };
+      }
+      audioBuffer = buildPcmWav(pcmData, fmt.sampleRate, fmt.numChannels, fmt.bitsPerSample);
+    } else {
+      audioBuffer = ensureWavHeaders(audioBuffer);
+    }
+    console.log(`[STT] normalised WAV: ${audioBuffer.length} bytes`);
   }
 
-  return result.text?.trim() || result.display_text?.trim() || '';
+  if (audioBuffer.length < 100) {
+    throw new Error(`Audio too small (${audioBuffer.length} bytes) — recording may have failed`);
+  }
+
+  // 1️⃣ Try Groq Whisper
+  try {
+    const transcript = await transcribeWithGroq(audioBuffer, lang);
+    if (transcript) { console.log('[STT] Groq succeeded'); return transcript; }
+  } catch (groqErr) {
+    console.warn('[STT] Groq failed, trying Reverie:', groqErr.message);
+  }
+
+  // 2️⃣ Try Reverie
+  try {
+    const transcript = await transcribeWithReverie(audioBuffer, lang);
+    if (transcript) { console.log('[STT] Reverie succeeded'); return transcript; }
+  } catch (revErr) {
+    console.warn('[STT] Reverie failed:', revErr.message);
+  }
+
+  // 3️⃣ Both failed — surface error so mobile app shows keyboard fallback
+  throw new Error('STT_FAILED');
 }
 
 async function analyseTranscript(transcript) {
@@ -203,12 +237,9 @@ export async function POST(request) {
       // Browser transcribed via Web Speech API — use directly
       transcript = directTranscript.trim();
     } else {
-      // Fallback: audio upload via Reverie
+      // Mobile: audio upload → Groq Whisper → Reverie fallback
       if (!audioData || !mimeType) {
         return Response.json({ error: 'Missing transcript or audioData' }, { status: 400 });
-      }
-      if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
-        return Response.json({ error: 'Reverie API credentials not configured' }, { status: 500 });
       }
       transcript = await transcribeAudio(audioData, mimeType, lang);
     }
@@ -245,6 +276,9 @@ export async function POST(request) {
     return Response.json({ success: true, transcript, data });
   } catch (err) {
     console.error('Voice API error:', err);
+    if (err.message === 'STT_FAILED') {
+      return Response.json({ error: 'STT_FAILED', sttFailed: true }, { status: 422 });
+    }
     return Response.json({ error: err.message || 'Voice analysis failed' }, { status: 500 });
   }
 }
