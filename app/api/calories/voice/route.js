@@ -5,9 +5,19 @@ import { createServerSupabase } from '../../../../lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-async function transcribeAudio(audioBase64, mimeType) {
+// Map BCP-47 locale codes (from mobile) to Reverie 2-letter lang codes
+const REVERIE_LANG_MAP = {
+  'en-IN': 'en', 'en': 'en',
+  'hi-IN': 'hi', 'hi': 'hi',
+  'ta-IN': 'ta', 'ta': 'ta',
+  'te-IN': 'te', 'te': 'te',
+};
+
+async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
   const audioBuffer = Buffer.from(audioBase64, 'base64');
-  const ext = mimeType.split('/')[1]?.split(';')[0] || 'webm';
+  // Always use .wav extension — Reverie STT file API requires PCM/WAV
+  const ext = mimeType === 'audio/wav' ? 'wav' : (mimeType.split('/')[1]?.split(';')[0] || 'wav');
+  const revLang = REVERIE_LANG_MAP[lang] || 'en';
 
   const form = new FormData();
   form.append('audio_file', new Blob([audioBuffer], { type: mimeType }), `recording.${ext}`);
@@ -18,7 +28,7 @@ async function transcribeAudio(audioBase64, mimeType) {
       'REV-API-KEY': process.env.REVERIE_API_KEY,
       'REV-APP-ID':  process.env.REVERIE_APP_ID,
       'REV-APPNAME': 'stt_file',
-      'src_lang':    'en',
+      'src_lang':    revLang,
       'domain':      'general',
     },
     body: form,
@@ -77,7 +87,7 @@ Rules:
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { transcript: directTranscript, audioData, mimeType } = body;
+    const { transcript: directTranscript, audioData, mimeType, lang } = body;
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return Response.json({ error: 'Anthropic API key not configured' }, { status: 500 });
@@ -96,7 +106,7 @@ export async function POST(request) {
       if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
         return Response.json({ error: 'Reverie API credentials not configured' }, { status: 500 });
       }
-      transcript = await transcribeAudio(audioData, mimeType);
+      transcript = await transcribeAudio(audioData, mimeType, lang);
     }
 
     if (!transcript) {
