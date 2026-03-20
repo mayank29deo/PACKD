@@ -18,11 +18,29 @@ export async function GET() {
   const supabase = createServerSupabase();
   const { data, error } = await supabase
     .from('posts')
-    .select('*, likes_agg:post_likes(count), comments_agg:post_comments(count)')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(50);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  const postIds = (data || []).map((p) => p.id);
+
+  // Count likes per post
+  const { data: likesData } = await supabase
+    .from('post_likes').select('post_id').in('post_id', postIds);
+  const likesCounts = {};
+  (likesData || []).forEach((r) => {
+    likesCounts[r.post_id] = (likesCounts[r.post_id] || 0) + 1;
+  });
+
+  // Count comments per post
+  const { data: commentsData } = await supabase
+    .from('post_comments').select('post_id').in('post_id', postIds);
+  const commentsCounts = {};
+  (commentsData || []).forEach((r) => {
+    commentsCounts[r.post_id] = (commentsCounts[r.post_id] || 0) + 1;
+  });
 
   const posts = (data || []).map((p) => ({
     id: p.id,
@@ -37,8 +55,8 @@ export async function GET() {
     mediaType: p.media_type || null,
     xp: p.xp || 0,
     time: formatTime(p.created_at),
-    likes: p.likes_agg?.[0]?.count ?? 0,
-    comments: p.comments_agg?.[0]?.count ?? 0,
+    likes: likesCounts[p.id] || 0,
+    comments: commentsCounts[p.id] || 0,
     fromDB: true,
   }));
 
