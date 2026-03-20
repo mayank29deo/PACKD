@@ -18,7 +18,7 @@ export async function GET() {
   const supabase = createServerSupabase();
   const { data, error } = await supabase
     .from('posts')
-    .select('*')
+    .select('*, likes_agg:post_likes(count), comments_agg:post_comments(count)')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -37,8 +37,8 @@ export async function GET() {
     mediaType: p.media_type || null,
     xp: p.xp || 0,
     time: formatTime(p.created_at),
-    likes: 0,
-    comments: 0,
+    likes: p.likes_agg?.[0]?.count ?? 0,
+    comments: p.comments_agg?.[0]?.count ?? 0,
     fromDB: true,
   }));
 
