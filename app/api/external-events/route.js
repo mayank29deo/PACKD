@@ -18,10 +18,12 @@ export async function GET() {
   try {
     const url =
       `https://www.eventbriteapi.com/v3/events/search/?q=fitness+sports+running+cycling` +
-      `&location.address=Bangalore,India&location.within=50km&expand=venue,organizer` +
-      `&token=${apiKey}`;
+      `&location.address=Bangalore,India&location.within=50km&expand=venue,organizer`;
 
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) {
       return Response.json({ events: [] });
     }
