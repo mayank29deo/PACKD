@@ -25,7 +25,8 @@ export async function GET() {
       next: { revalidate: 3600 },
     });
     if (!res.ok) {
-      return Response.json({ events: [] });
+      const errText = await res.text();
+      return Response.json({ events: [], _debug: { status: res.status, body: errText } });
     }
 
     const json = await res.json();
