@@ -16,17 +16,26 @@ const VENUES = [
   { name: 'CrossFit Bangalore HSR', sport: 'CrossFit / HIIT', rating: 4.8, reviews: 143, area: 'HSR Layout', tags: ['₹300/session', 'Coaches'] },
 ];
 
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ExplorePage() {
-  const { events, packs, rsvps, toggleRsvp, joinedPacks, toggleJoinPack } = useApp();
+  const { packs, joinedPacks, toggleJoinPack, communityEvents, externalEvents } = useApp();
   const [sport, setSport] = useState('All');
   const [view, setView] = useState('Events');
   const [search, setSearch] = useState('');
 
-  const filteredEvents = events.filter((e) => {
+  const filterList = (list) => list.filter((e) => {
     const matchSport = sport === 'All' || e.sport === sport;
-    const matchSearch = !search || e.title.toLowerCase().includes(search.toLowerCase()) || (e.area || '').toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || (e.title || '').toLowerCase().includes(search.toLowerCase()) || (e.area || '').toLowerCase().includes(search.toLowerCase());
     return matchSport && matchSearch;
   });
+
+  const filteredCommunity = filterList(communityEvents);
+  const filteredExternal = filterList(externalEvents);
 
   const filteredPacks = packs.filter((p) => {
     const matchSport = sport === 'All' || p.sport === sport;
@@ -73,49 +82,70 @@ export default function ExplorePage() {
 
       <div className="max-w-lg mx-auto px-4 py-4">
         {view === 'Events' && (
-          <div className="space-y-3">
-            <p className="text-xs text-packd-gray">{filteredEvents.length} events near you</p>
-            {filteredEvents.map((ev) => (
-              <Link key={ev.id} href={`/event/${ev.id}`} className="block packd-card card-hover p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${SPORT_COLORS[ev.sport] || 'text-packd-gray bg-packd-border'}`}>
-                    {ev.sport}
-                  </span>
-                  <span className={`text-xs font-semibold ${ev.cost === 'Free' ? 'text-packd-green' : 'text-packd-gold'}`}>
-                    {ev.cost}
-                  </span>
+          <div className="space-y-6">
+            {/* ── Community Events ── */}
+            <div>
+              <h2 className="text-xs font-bold text-packd-gray uppercase tracking-widest mb-3">Community Events</h2>
+              {filteredCommunity.length === 0 ? (
+                <div className="text-center py-8 text-packd-gray">
+                  <p className="text-2xl mb-1">📅</p>
+                  <p className="text-sm">No community events yet</p>
+                  <Link href="/create" className="text-packd-orange text-xs mt-1 block">Create one →</Link>
                 </div>
-                <h3 className="text-sm font-bold text-white mb-1">{ev.title}</h3>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-packd-gray mb-3">
-                  <span>📍 {ev.venue} · {ev.area}</span>
-                  <span>🕐 {ev.time}</span>
-                  {ev.distance && <span>📏 {ev.distance}</span>}
-                  <span>🎯 {ev.level}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-1 mb-1">
-                      <div className="h-1 bg-packd-border rounded-full overflow-hidden w-20">
-                        <div className="h-full bg-packd-orange rounded-full" style={{ width: `${(ev.rsvp / ev.max) * 100}%` }} />
+              ) : (
+                <div className="space-y-3">
+                  {filteredCommunity.map((ev) => (
+                    <div key={ev.id} className="packd-card p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${SPORT_COLORS[ev.sport] || 'text-packd-gray bg-packd-border'}`}>
+                          {ev.sport}
+                        </span>
+                        <span className={`text-xs font-semibold ${ev.cost === 'Free' ? 'text-packd-green' : 'text-packd-gold'}`}>
+                          {ev.cost || 'Free'}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-packd-gray">{ev.rsvp}/{ev.max}</span>
+                      <h3 className="text-sm font-bold text-white mb-1">{ev.title}</h3>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-packd-gray mb-2">
+                        <span>📍 {ev.venue}{ev.area ? ` · ${ev.area}` : ''}</span>
+                        <span>🕐 {formatDate(ev.date_time)}</span>
+                        <span>👥 {ev.attendee_count?.[0]?.count ?? ev.attendee_count ?? 0} going</span>
+                      </div>
+                      {ev.description && <p className="text-xs text-packd-gray line-clamp-2">{ev.description}</p>}
                     </div>
-                    <span className="text-[10px] text-packd-gray">{ev.max - ev.rsvp} spots left</span>
-                  </div>
-                  <button
-                    onClick={(e) => { e.preventDefault(); toggleRsvp(ev.id); }}
-                    className={rsvps[ev.id] ? 'text-xs font-semibold text-packd-green border border-packd-green rounded-xl px-3 py-1.5' : 'packd-btn-primary text-xs px-3 py-1.5'}
-                  >
-                    {rsvps[ev.id] ? '✓ Going' : 'RSVP'}
-                  </button>
+                  ))}
                 </div>
-              </Link>
-            ))}
-            {filteredEvents.length === 0 && (
-              <div className="text-center py-12 text-packd-gray">
-                <p className="text-3xl mb-2">🔍</p>
-                <p className="text-sm">No events found</p>
-                <Link href="/create" className="text-packd-orange text-xs mt-1 block">Create one →</Link>
+              )}
+            </div>
+
+            {/* ── Discover (External) ── */}
+            {filteredExternal.length > 0 && (
+              <div>
+                <h2 className="text-xs font-bold text-packd-gray uppercase tracking-widest mb-3">Discover in Bangalore</h2>
+                <div className="space-y-3">
+                  {filteredExternal.map((ev) => (
+                    <div key={ev.id} className="packd-card p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${SPORT_COLORS[ev.sport] || 'text-packd-gray bg-packd-border'}`}>
+                          {ev.sport}
+                        </span>
+                        <span className="text-[10px] text-packd-gray bg-packd-card2 px-2 py-0.5 rounded-full">via PredictHQ</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white mb-1">{ev.title}</h3>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-packd-gray mb-2">
+                        <span>📍 {ev.venue}{ev.area ? ` · ${ev.area}` : ''}</span>
+                        <span>🕐 {formatDate(ev.date_time)}</span>
+                        {ev.attendee_count > 0 && <span>👥 ~{ev.attendee_count.toLocaleString()} expected</span>}
+                      </div>
+                      {ev.description && <p className="text-xs text-packd-gray line-clamp-2 mb-3">{ev.description}</p>}
+                      {ev.external_url && (
+                        <a href={ev.external_url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs font-semibold text-packd-orange border border-packd-orange rounded-xl px-3 py-1.5 inline-block">
+                          View Event →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
