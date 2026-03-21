@@ -67,28 +67,8 @@ export async function POST(request) {
 
     const data = JSON.parse(jsonMatch[0]);
 
-    // Save to DB if user is logged in (non-fatal if it fails)
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const supabase = createServerSupabase();
-        await supabase.from('meal_logs').insert({
-          user_email:    session.user.email,
-          meal_name:     data.meal,
-          total_calories: data.totalCalories,
-          protein_g:     data.macros?.protein || 0,
-          carbs_g:       data.macros?.carbs   || 0,
-          fat_g:         data.macros?.fat     || 0,
-          items:         data.items   || [],
-          confidence:    data.confidence,
-          serving_note:  data.servingNote,
-          athlete_tip:   data.athleteTip,
-        });
-      }
-    } catch (dbErr) {
-      console.warn('Meal log save failed (non-fatal):', dbErr.message);
-    }
-
+    // DB save is handled explicitly by the /api/calories/log endpoint
+    // so the user can adjust quantities / add voice refinements before logging.
     return Response.json({ success: true, data });
   } catch (err) {
     console.error('Calorie API error:', err);

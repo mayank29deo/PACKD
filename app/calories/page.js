@@ -624,6 +624,322 @@ function InsightsTab({ insights, insightsLoading, dailyTarget, onRefresh }) {
   );
 }
 
+// ─── Meal Result Panel ────────────────────────────────────────────────────────
+// Shared by both photo and voice results. Handles quantity adjustment,
+// voice refinement, and explicit meal logging.
+function MealResultPanel({ result, voiceLang, isLoggedIn, onLogComplete }) {
+  const [itemQtys, setItemQtys] = useState(() => result.items?.map(() => 1) || []);
+  const [refinedResult, setRefinedResult] = useState(null);
+  const [refineMode, setRefineMode] = useState(false);
+  const [refineRecording, setRefineRecording] = useState(false);
+  const [refineSecs, setRefineSecs] = useState(0);
+  const [refineLoading, setRefineLoading] = useState(false);
+  const [refineTranscript, setRefineTranscript] = useState('');
+  const [refineError, setRefineError] = useState(null);
+  const refineRecRef = useRef(null);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logDone, setLogDone] = useState(false);
+
+  const activeResult = refinedResult || result;
+
+  // Reset item qtys when refined result arrives
+  useEffect(() => {
+    if (refinedResult) setItemQtys(refinedResult.items?.map(() => 1) || []);
+  }, [refinedResult]);
+
+  // Derived adjusted values — scale macros proportionally to qty-adjusted item sum
+  const origItemSum = activeResult.items?.reduce((s, it) => s + it.calories, 0) || activeResult.totalCalories;
+  const adjItemSum  = activeResult.items?.reduce((s, it, i) => s + it.calories * (itemQtys[i] ?? 1), 0) || activeResult.totalCalories;
+  const scale       = origItemSum > 0 ? adjItemSum / origItemSum : 1;
+  const adjCalories = Math.round(activeResult.totalCalories * scale);
+  const adjMacros   = {
+    protein: Math.round(activeResult.macros.protein * scale),
+    carbs:   Math.round(activeResult.macros.carbs   * scale),
+    fat:     Math.round(activeResult.macros.fat     * scale),
+  };
+  const maxMacro = Math.max(adjMacros.protein, adjMacros.carbs, adjMacros.fat, 1);
+
+  function changeQty(i, delta) {
+    setItemQtys(prev => {
+      const next = [...prev];
+      next[i] = Math.max(0, (next[i] ?? 1) + delta);
+      return next;
+    });
+  }
+
+  // Voice refinement recording (reuses Web Speech API like the main voice mode)
+  function startRefineRec() {
+    setRefineError(null);
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setRefineError('Voice not supported — please use Chrome'); return; }
+    const rec = new SR();
+    rec.lang = voiceLang;
+    rec.interimResults = false;
+    rec.onstart = () => { setRefineRecording(true); setRefineSecs(0); };
+    rec.onend   = () => setRefineRecording(false);
+    rec.onresult = e => {
+      const t = e.results[0][0].transcript;
+      setRefineTranscript(t);
+      doRefine(t);
+    };
+    rec.onerror = e => { setRefineRecording(false); setRefineError(`Error: ${e.error}`); };
+    refineRecRef.current = rec;
+    rec.start();
+    const tick = setInterval(() => setRefineSecs(s => {
+      if (s >= 59) { rec.stop(); clearInterval(tick); return s; }
+      return s + 1;
+    }), 1000);
+    rec._tick = tick;
+  }
+
+  function stopRefineRec() {
+    if (refineRecRef.current) {
+      clearInterval(refineRecRef.current._tick);
+      try { refineRecRef.current.stop(); } catch {}
+      setRefineRecording(false);
+    }
+  }
+
+  async function doRefine(transcript) {
+    setRefineLoading(true); setRefineError(null);
+    try {
+      const res  = await fetch('/api/calories/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ existingAnalysis: activeResult, voiceTranscript: transcript }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Refinement failed');
+      setRefinedResult(json.data);
+      setRefineMode(false);
+    } catch (err) {
+      setRefineError(err.message);
+    } finally {
+      setRefineLoading(false);
+    }
+  }
+
+  async function logMeal() {
+    setLogLoading(true);
+    try {
+      const finalItems = activeResult.items?.map((it, i) => ({
+        ...it,
+        calories: Math.round(it.calories * (itemQtys[i] ?? 1)),
+        portion:  (itemQtys[i] ?? 1) !== 1 ? `${itemQtys[i]}× ${it.portion}` : it.portion,
+      }));
+      const mealData = {
+        meal: activeResult.meal, totalCalories: adjCalories, macros: adjMacros,
+        items: finalItems, confidence: activeResult.confidence,
+        servingNote: activeResult.servingNote, athleteTip: activeResult.athleteTip,
+      };
+      if (isLoggedIn) {
+        await fetch('/api/calories/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mealData),
+        });
+      }
+      setLogDone(true);
+      onLogComplete?.(mealData);
+    } finally {
+      setLogLoading(false);
+    }
+  }
+
+  const confCls = activeResult.confidence === 'high'
+    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+    : activeResult.confidence === 'medium'
+    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+    : 'bg-packd-border/30 text-packd-gray border-packd-border';
+  const confLabel = activeResult.confidence === 'high' ? 'High confidence'
+    : activeResult.confidence === 'medium' ? 'Approx' : 'Low confidence';
+
+  return (
+    <div className="space-y-3">
+
+      {/* Updated-by-voice badge */}
+      {refinedResult && (
+        <div className="flex items-center gap-2 px-1 flex-wrap">
+          <span className="text-xs font-bold text-emerald-400">✓ Analysis updated</span>
+          {refinedResult.addedItems?.length > 0 && (
+            <span className="text-xs text-packd-gray">+ {refinedResult.addedItems.join(', ')}</span>
+          )}
+        </div>
+      )}
+
+      {/* Main calorie card */}
+      <div className="packd-card p-5">
+        <div className="flex items-start justify-between mb-1 gap-2">
+          <p className="text-sm font-bold text-white leading-tight">{activeResult.meal}</p>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${confCls}`}>
+            {confLabel}
+          </span>
+        </div>
+        {activeResult.servingNote && (
+          <p className="text-xs text-packd-gray mb-4">{activeResult.servingNote}</p>
+        )}
+        <div className="flex items-end gap-2 mb-5">
+          <span className="text-5xl font-black text-packd-orange leading-none">{adjCalories}</span>
+          <span className="text-packd-gray text-sm pb-1">kcal</span>
+        </div>
+        <div className="space-y-2.5">
+          {[
+            { label: 'Protein', grams: adjMacros.protein, color: 'bg-packd-orange' },
+            { label: 'Carbs',   grams: adjMacros.carbs,   color: 'bg-amber-500' },
+            { label: 'Fat',     grams: adjMacros.fat,     color: 'bg-emerald-500' },
+          ].map(({ label, grams, color }) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-[11px] text-packd-gray w-14 flex-shrink-0">{label}</span>
+              <div className="flex-1 h-2 rounded-full bg-packd-border overflow-hidden">
+                <div className={`h-full rounded-full ${color}`}
+                  style={{ width: `${(grams / maxMacro) * 100}%`, transition: 'width 0.7s ease' }}/>
+              </div>
+              <span className="text-[11px] font-semibold text-packd-text w-10 text-right">{grams}g</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Items breakdown with +/− quantity controls */}
+      {activeResult.items?.length > 0 && (
+        <div className="packd-card p-4">
+          <p className="text-[10px] font-bold text-packd-gray uppercase tracking-widest mb-3">
+            Breakdown <span className="normal-case font-normal text-packd-gray/60">· tap +/− to adjust</span>
+          </p>
+          <div className="space-y-3">
+            {activeResult.items.map((item, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{item.name}</p>
+                  {item.portion && <p className="text-[11px] text-packd-gray">{item.portion}</p>}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button onClick={() => changeQty(i, -1)}
+                    className="w-6 h-6 rounded-full bg-packd-border/80 flex items-center justify-center text-white text-xs font-bold hover:bg-red-500/30 transition-colors">
+                    −
+                  </button>
+                  <span className="text-sm font-bold text-white w-5 text-center">{itemQtys[i] ?? 1}</span>
+                  <button onClick={() => changeQty(i, +1)}
+                    className="w-6 h-6 rounded-full bg-packd-border/80 flex items-center justify-center text-white text-xs font-bold hover:bg-emerald-500/30 transition-colors">
+                    +
+                  </button>
+                </div>
+                <span className="text-sm font-semibold text-packd-orange w-16 text-right flex-shrink-0">
+                  {Math.round(item.calories * (itemQtys[i] ?? 1))} kcal
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Athlete tip */}
+      {activeResult.athleteTip && (
+        <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
+          <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">Athlete Tip</p>
+          <p className="text-sm text-packd-text leading-relaxed">{activeResult.athleteTip}</p>
+        </div>
+      )}
+
+      {/* Voice refinement — "I added something else" */}
+      {!refineMode && !refineLoading && !logDone && (
+        <button
+          onClick={() => { setRefineMode(true); setRefineError(null); }}
+          className="w-full packd-card p-3.5 flex items-center gap-3 border-dashed hover:border-packd-orange/50 transition-colors text-left">
+          <span className="text-xl flex-shrink-0">🎙</span>
+          <div>
+            <p className="text-sm font-semibold text-packd-text">I added something else…</p>
+            <p className="text-xs text-packd-gray">Drop a voice note — AI will update the analysis</p>
+          </div>
+        </button>
+      )}
+
+      {refineMode && !refineLoading && (
+        <div className="packd-card p-5 space-y-4 border border-packd-orange/20">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-white">What else did you add?</p>
+            <button
+              onClick={() => { setRefineMode(false); setRefineError(null); stopRefineRec(); }}
+              className="text-packd-gray hover:text-white w-7 h-7 flex items-center justify-center text-lg">
+              ✕
+            </button>
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={refineRecording ? stopRefineRec : startRefineRec}
+              className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                refineRecording
+                  ? 'bg-red-500 shadow-lg shadow-red-500/40'
+                  : 'bg-packd-orange/15 border-2 border-packd-orange hover:bg-packd-orange/25'
+              }`}>
+              {refineRecording && (
+                <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping"/>
+              )}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                className={refineRecording ? 'text-white' : 'text-packd-orange'}>
+                <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                <path d="M12 18v4M9 22h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {refineRecording ? (
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
+                <span className="text-sm font-bold text-red-400">0:{String(refineSecs).padStart(2, '0')}</span>
+                <span className="text-xs text-packd-gray">· tap to stop</span>
+              </div>
+            ) : (
+              <p className="text-xs text-packd-gray text-center max-w-xs">
+                e.g. &quot;I also added 2 almonds and a spoon of peanut butter&quot;
+              </p>
+            )}
+            {refineError && <p className="text-xs text-red-400 text-center">{refineError}</p>}
+          </div>
+        </div>
+      )}
+
+      {refineLoading && (
+        <div className="packd-card p-4 flex items-center gap-3 border border-packd-orange/20">
+          <div className="w-8 h-8 rounded-full border-2 border-packd-orange border-t-transparent animate-spin flex-shrink-0"/>
+          <div>
+            <p className="text-sm font-semibold text-white">Updating analysis…</p>
+            {refineTranscript && (
+              <p className="text-xs text-packd-gray mt-0.5 italic truncate">&quot;{refineTranscript}&quot;</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Explicit log button */}
+      {logDone ? (
+        <div className="packd-card p-3.5 border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2">
+          <span className="text-emerald-400 font-bold text-lg">✓</span>
+          <p className="text-xs text-emerald-400 font-semibold">
+            Logged {adjCalories} kcal — check Today tab
+          </p>
+        </div>
+      ) : isLoggedIn ? (
+        <button onClick={logMeal} disabled={logLoading}
+          className="w-full packd-btn-primary py-3.5 text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+          {logLoading ? (
+            <>
+              <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/>
+              Logging…
+            </>
+          ) : (
+            <>✓ Log This Meal · {adjCalories} kcal</>
+          )}
+        </button>
+      ) : (
+        <div className="packd-card p-3.5 border border-packd-border/60 flex items-center justify-between gap-2">
+          <p className="text-xs text-packd-gray">Sign in to save your meal history</p>
+          <Link href="/auth/login" className="text-xs text-packd-orange font-semibold flex-shrink-0">Sign in →</Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CaloriesPage() {
   const { data: session, status } = useSession();
@@ -730,19 +1046,6 @@ export default function CaloriesPage() {
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Analysis failed');
       setResult(json.data);
-      if (isLoggedIn) {
-        const newLog = {
-          id:             'local_' + Date.now(),
-          meal_name:      json.data.meal,
-          total_calories: json.data.totalCalories,
-          protein_g:      json.data.macros?.protein || 0,
-          carbs_g:        json.data.macros?.carbs   || 0,
-          fat_g:          json.data.macros?.fat     || 0,
-          logged_at:      new Date().toISOString(),
-        };
-        setLogs(prev => [newLog, ...prev]);
-        setInsights(null); // reset so insights re-fetch with fresh data
-      }
     } catch (err) {
       setScanError(err.message);
     } finally {
@@ -822,19 +1125,6 @@ export default function CaloriesPage() {
       if (!res.ok || !json.success) throw new Error(json.error || 'Voice analysis failed');
 
       setVoiceResult(json);
-      if (isLoggedIn) {
-        const newLog = {
-          id:             'local_v_' + Date.now(),
-          meal_name:      json.data.meal,
-          total_calories: json.data.totalCalories,
-          protein_g:      json.data.macros?.protein || 0,
-          carbs_g:        json.data.macros?.carbs   || 0,
-          fat_g:          json.data.macros?.fat     || 0,
-          logged_at:      new Date().toISOString(),
-        };
-        setLogs(prev => [newLog, ...prev]);
-        setInsights(null);
-      }
     } catch (err) {
       setVoiceError(err.message);
     } finally {
@@ -1070,87 +1360,28 @@ export default function CaloriesPage() {
 
                 {voiceResult && (
                   <div className="space-y-3">
-                    {/* Transcript card */}
                     <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
                       <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">You said</p>
                       <p className="text-sm text-packd-text italic leading-relaxed">&quot;{voiceResult.transcript}&quot;</p>
                     </div>
-
-                    {/* Calorie result — same card layout as photo */}
-                    <div className="packd-card p-5">
-                      <div className="flex items-start justify-between mb-1 gap-2">
-                        <p className="text-sm font-bold text-white leading-tight">{voiceResult.data.meal}</p>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 bg-amber-500/15 text-amber-400 border-amber-500/30">
-                          Ballpark estimate
-                        </span>
-                      </div>
-                      {voiceResult.data.servingNote && (
-                        <p className="text-xs text-packd-gray mb-4">{voiceResult.data.servingNote}</p>
-                      )}
-                      <div className="flex items-end gap-2 mb-5">
-                        <span className="text-5xl font-black text-packd-orange leading-none">
-                          {voiceResult.data.totalCalories}
-                        </span>
-                        <span className="text-packd-gray text-sm pb-1">kcal</span>
-                      </div>
-                      <div className="space-y-2.5">
-                        {(() => {
-                          const m = voiceResult.data.macros;
-                          const mx = Math.max(m.protein, m.carbs, m.fat, 1);
-                          return [
-                            { label: 'Protein', grams: m.protein, color: 'bg-packd-orange' },
-                            { label: 'Carbs',   grams: m.carbs,   color: 'bg-amber-500' },
-                            { label: 'Fat',     grams: m.fat,     color: 'bg-emerald-500' },
-                          ].map(({ label, grams, color }) => (
-                            <div key={label} className="flex items-center gap-2">
-                              <span className="text-[11px] text-packd-gray w-14 flex-shrink-0">{label}</span>
-                              <div className="flex-1 h-2 rounded-full bg-packd-border overflow-hidden">
-                                <div className={`h-full rounded-full ${color}`}
-                                  style={{ width: `${(grams / mx) * 100}%`, transition: 'width 0.7s ease' }}/>
-                              </div>
-                              <span className="text-[11px] font-semibold text-packd-text w-10 text-right">{grams}g</span>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-
-                    {voiceResult.data.items?.length > 0 && (
-                      <div className="packd-card p-4">
-                        <p className="text-[10px] font-bold text-packd-gray uppercase tracking-widest mb-3">Breakdown</p>
-                        <div className="space-y-2.5">
-                          {voiceResult.data.items.map((item, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm text-white">{item.name}</p>
-                                {item.portion && <p className="text-[11px] text-packd-gray">{item.portion}</p>}
-                              </div>
-                              <span className="text-sm font-semibold text-packd-orange">{item.calories} kcal</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {voiceResult.data.athleteTip && (
-                      <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
-                        <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">Athlete Tip</p>
-                        <p className="text-sm text-packd-text leading-relaxed">{voiceResult.data.athleteTip}</p>
-                      </div>
-                    )}
-
-                    {isLoggedIn ? (
-                      <div className="packd-card p-3.5 border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2">
-                        <span className="text-emerald-400 font-bold">✓</span>
-                        <p className="text-xs text-emerald-400 font-semibold">Meal logged — check Today tab</p>
-                      </div>
-                    ) : (
-                      <div className="packd-card p-3.5 border border-packd-border/60 flex items-center justify-between gap-2">
-                        <p className="text-xs text-packd-gray">Sign in to save your meal history</p>
-                        <Link href="/auth/login" className="text-xs text-packd-orange font-semibold flex-shrink-0">Sign in →</Link>
-                      </div>
-                    )}
-
+                    <MealResultPanel
+                      result={voiceResult.data}
+                      voiceLang={voiceLang}
+                      isLoggedIn={isLoggedIn}
+                      onLogComplete={(mealData) => {
+                        const newLog = {
+                          id: 'local_v_' + Date.now(),
+                          meal_name: mealData.meal,
+                          total_calories: mealData.totalCalories,
+                          protein_g: mealData.macros.protein,
+                          carbs_g:   mealData.macros.carbs,
+                          fat_g:     mealData.macros.fat,
+                          logged_at: new Date().toISOString(),
+                        };
+                        setLogs(prev => [newLog, ...prev]);
+                        setInsights(null);
+                      }}
+                    />
                     <button onClick={resetVoice} className="w-full packd-btn-ghost py-3 text-sm">
                       Record another meal
                     </button>
@@ -1219,81 +1450,24 @@ export default function CaloriesPage() {
 
             {scanMode === 'photo' && result && (
               <div className="space-y-3">
-
-                <div className="packd-card p-5">
-                  <div className="flex items-start justify-between mb-1 gap-2">
-                    <p className="text-sm font-bold text-white leading-tight">{result.meal}</p>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${
-                      result.confidence === 'high'   ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                      : result.confidence === 'medium' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                      :                                   'bg-packd-border/30 text-packd-gray border-packd-border'
-                    }`}>
-                      {result.confidence === 'high' ? 'High confidence' : result.confidence === 'medium' ? 'Approx' : 'Low confidence'}
-                    </span>
-                  </div>
-                  {result.servingNote && <p className="text-xs text-packd-gray mb-4">{result.servingNote}</p>}
-
-                  <div className="flex items-end gap-2 mb-5">
-                    <span className="text-5xl font-black text-packd-orange leading-none">{result.totalCalories}</span>
-                    <span className="text-packd-gray text-sm pb-1">kcal</span>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {[
-                      { label: 'Protein', grams: result.macros.protein, color: 'bg-packd-orange' },
-                      { label: 'Carbs',   grams: result.macros.carbs,   color: 'bg-amber-500' },
-                      { label: 'Fat',     grams: result.macros.fat,     color: 'bg-emerald-500' },
-                    ].map(({ label, grams, color }) => (
-                      <div key={label} className="flex items-center gap-2">
-                        <span className="text-[11px] text-packd-gray w-14 flex-shrink-0">{label}</span>
-                        <div className="flex-1 h-2 rounded-full bg-packd-border overflow-hidden">
-                          <div className={`h-full rounded-full ${color}`}
-                            style={{ width: `${(grams / maxMacro) * 100}%`, transition: 'width 0.7s ease' }}/>
-                        </div>
-                        <span className="text-[11px] font-semibold text-packd-text w-10 text-right">{grams}g</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {result.items?.length > 0 && (
-                  <div className="packd-card p-4">
-                    <p className="text-[10px] font-bold text-packd-gray uppercase tracking-widest mb-3">Breakdown</p>
-                    <div className="space-y-2.5">
-                      {result.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-white">{item.name}</p>
-                            {item.portion && <p className="text-[11px] text-packd-gray">{item.portion}</p>}
-                          </div>
-                          <span className="text-sm font-semibold text-packd-orange">{item.calories} kcal</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {result.athleteTip && (
-                  <div className="packd-card p-4 border border-packd-orange/20 bg-packd-orange/5">
-                    <p className="text-[10px] font-bold text-packd-orange uppercase tracking-widest mb-1.5">Athlete Tip</p>
-                    <p className="text-sm text-packd-text leading-relaxed">{result.athleteTip}</p>
-                  </div>
-                )}
-
-                {isLoggedIn ? (
-                  <div className="packd-card p-3.5 border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2">
-                    <span className="text-emerald-400 font-bold">✓</span>
-                    <p className="text-xs text-emerald-400 font-semibold">
-                      Meal logged — check Today tab for your daily totals
-                    </p>
-                  </div>
-                ) : (
-                  <div className="packd-card p-3.5 border border-packd-border/60 flex items-center justify-between gap-2">
-                    <p className="text-xs text-packd-gray">Sign in to save your meal history</p>
-                    <Link href="/auth/login" className="text-xs text-packd-orange font-semibold flex-shrink-0">Sign in →</Link>
-                  </div>
-                )}
-
+                <MealResultPanel
+                  result={result}
+                  voiceLang={voiceLang}
+                  isLoggedIn={isLoggedIn}
+                  onLogComplete={(mealData) => {
+                    const newLog = {
+                      id: 'local_' + Date.now(),
+                      meal_name: mealData.meal,
+                      total_calories: mealData.totalCalories,
+                      protein_g: mealData.macros.protein,
+                      carbs_g:   mealData.macros.carbs,
+                      fat_g:     mealData.macros.fat,
+                      logged_at: new Date().toISOString(),
+                    };
+                    setLogs(prev => [newLog, ...prev]);
+                    setInsights(null);
+                  }}
+                />
                 <button onClick={resetScan} className="w-full packd-btn-ghost py-3 text-sm">
                   Scan another meal
                 </button>

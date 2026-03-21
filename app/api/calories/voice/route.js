@@ -1,7 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../lib/auth';
-import { createServerSupabase } from '../../../../lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -251,28 +248,8 @@ export async function POST(request) {
     // Step 2: Analyse transcript for nutrition
     const data = await analyseTranscript(transcript);
 
-    // Step 3: Save to DB if user is signed in (non-fatal)
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const supabase = createServerSupabase();
-        await supabase.from('meal_logs').insert({
-          user_email:     session.user.email,
-          meal_name:      data.meal,
-          total_calories: data.totalCalories,
-          protein_g:      data.macros?.protein || 0,
-          carbs_g:        data.macros?.carbs   || 0,
-          fat_g:          data.macros?.fat     || 0,
-          items:          data.items   || [],
-          confidence:     data.confidence,
-          serving_note:   data.servingNote,
-          athlete_tip:    data.athleteTip,
-        });
-      }
-    } catch (dbErr) {
-      console.warn('Voice meal log save failed (non-fatal):', dbErr.message);
-    }
-
+    // DB save is handled explicitly by the /api/calories/log endpoint
+    // so the user can adjust quantities / add voice refinements before logging.
     return Response.json({ success: true, transcript, data });
   } catch (err) {
     console.error('Voice API error:', err);
