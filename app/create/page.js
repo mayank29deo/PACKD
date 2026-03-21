@@ -10,13 +10,14 @@ const STEPS = ['Type', 'Details', 'Venue', 'Settings', 'Preview'];
 
 export default function CreatePage() {
   const router = useRouter();
-  const { createEvent, user } = useApp();
+  const { user } = useApp();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     sport: '', title: '', date: '', time: '', duration: '60',
     venue: '', area: '', level: 'All levels', max: '20', cost: 'Free', description: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [coverPhoto, setCoverPhoto] = useState(null);
   const coverFileRef = useRef(null);
 
@@ -24,23 +25,32 @@ export default function CreatePage() {
   function next() { if (step < STEPS.length - 1) setStep((s) => s + 1); }
   function back() { if (step > 0) setStep((s) => s - 1); }
 
-  function handlePublish() {
-    createEvent({
-      sport: form.sport,
-      title: form.title || `${form.sport} Event`,
-      time: form.time ? `${form.date} ${form.time}` : form.date,
-      date: form.date,
-      distance: '',
-      organizer: user.name,
-      organizerId: null,
-      rsvp: 0,
-      max: parseInt(form.max) || 20,
-      level: form.level,
-      cost: form.cost,
-      venue: form.venue,
-      area: form.area,
-      description: form.description,
-    });
+  async function handlePublish() {
+    setPublishing(true);
+    // Build ISO date_time from date + time fields
+    const date_time = form.date && form.time
+      ? new Date(`${form.date}T${form.time}`).toISOString()
+      : form.date
+        ? new Date(`${form.date}T07:00:00`).toISOString()
+        : new Date().toISOString();
+
+    await fetch('/api/community-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: form.title || `${form.sport} Event`,
+        sport: form.sport || 'Sports',
+        description: form.description,
+        venue: form.venue || 'TBD',
+        area: form.area,
+        city: 'Bangalore',
+        date_time,
+        cost: form.cost || 'Free',
+        max_attendees: parseInt(form.max) || null,
+      }),
+    }).catch(() => {});
+
+    setPublishing(false);
     setSubmitted(true);
   }
 
@@ -264,8 +274,8 @@ export default function CreatePage() {
               Continue →
             </button>
           ) : (
-            <button onClick={handlePublish} className="flex-1 packd-btn-primary py-3 text-sm orange-glow">
-              🚀 Publish Event
+            <button onClick={handlePublish} disabled={publishing} className="flex-1 packd-btn-primary py-3 text-sm orange-glow disabled:opacity-50">
+              {publishing ? 'Publishing…' : '🚀 Publish Event'}
             </button>
           )}
         </div>
