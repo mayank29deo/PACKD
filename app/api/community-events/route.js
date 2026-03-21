@@ -6,13 +6,32 @@ export async function GET() {
   const supabase = createServerSupabase();
   const { data, error } = await supabase
     .from('community_events')
-    .select('*, attendee_count:event_attendees(count)')
+    .select('*')
     .gte('date_time', new Date().toISOString())
     .order('date_time', { ascending: true })
     .limit(50);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ events: data || [] });
+
+  // Fetch attendee counts separately to avoid foreign-key join issues
+  const eventIds = (data || []).map((e) => e.id);
+  let attendeeCounts = {};
+  if (eventIds.length > 0) {
+    const { data: attendees } = await supabase
+      .from('event_attendees')
+      .select('event_id')
+      .in('event_id', eventIds);
+    (attendees || []).forEach((r) => {
+      attendeeCounts[r.event_id] = (attendeeCounts[r.event_id] || 0) + 1;
+    });
+  }
+
+  const events = (data || []).map((e) => ({
+    ...e,
+    attendee_count: attendeeCounts[e.id] || 0,
+  }));
+
+  return Response.json({ events });
 }
 
 export async function POST(request) {
