@@ -75,7 +75,9 @@ export async function GET() {
         id: 'ext_' + event.id,
         title: event.title || '',
         sport,
-        description: event.description?.slice(0, 300) || '',
+        description: (event.description && !event.description.startsWith('Sourced from'))
+          ? event.description.slice(0, 300)
+          : `${sport} event in Bangalore${venue?.name ? ` at ${venue.name}` : ''}. ${event.phq_attendance ? `Expected attendance: ${event.phq_attendance.toLocaleString()}.` : ''}`.trim(),
         venue: venue?.name || 'TBD',
         area: venue?.formatted_address || 'Bangalore',
         city: 'Bangalore',
