@@ -1028,7 +1028,8 @@ export default function CaloriesPage() {
     if (!file.type.startsWith('image/')) { setScanError('Please select an image file.'); return; }
     setResult(null); setScanError(null);
     setPreview(URL.createObjectURL(file));
-    setMimeType(file.type);
+    const SUPPORTED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    setMimeType(SUPPORTED_MIME.includes(file.type) ? file.type : 'image/jpeg');
     const reader = new FileReader();
     reader.onload = ev => setImageData(ev.target.result.split(',')[1]);
     reader.readAsDataURL(file);
