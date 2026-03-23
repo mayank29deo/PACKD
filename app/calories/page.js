@@ -1216,9 +1216,10 @@ export default function CaloriesPage() {
           </div>
         </div>
 
-        <div className="max-w-lg mx-auto px-4 flex">
+        <div className="max-w-lg mx-auto px-4 flex" data-tour="cal-tabs">
           {TABS.map(({ id, label, Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)}
+              data-tour={`cal-tab-${id}`}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold border-b-2 transition-all ${
                 activeTab === id
                   ? 'border-packd-orange text-packd-orange'
@@ -1237,7 +1238,7 @@ export default function CaloriesPage() {
           <div className="px-4 py-4 space-y-4">
 
             {/* Mode toggle: Photo / Voice */}
-            <div className="flex bg-packd-card border border-packd-border rounded-xl p-1 gap-1">
+            <div className="flex bg-packd-card border border-packd-border rounded-xl p-1 gap-1" data-tour="cal-scan-toggle">
               <button onClick={() => { setScanMode('photo'); resetVoice(); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   scanMode === 'photo'
@@ -1482,29 +1483,35 @@ export default function CaloriesPage() {
 
         {/* ── TODAY TAB ── */}
         {activeTab === 'today' && (
-          isLoggedIn
-            ? <TodayTab
-                todayLogs={todayLogs}
-                todayCalories={todayCalories}
-                todayMacros={todayMacros}
-                dailyTarget={dailyTarget}
-                macroTargets={macroTargets}
-                fuelScore={fuelScore}
-                historyLoading={historyLoading}
-              />
-            : <SignInPrompt feature="daily tracking"/>
+          <div data-tour="cal-today-content">
+            {isLoggedIn
+              ? <TodayTab
+                  todayLogs={todayLogs}
+                  todayCalories={todayCalories}
+                  todayMacros={todayMacros}
+                  dailyTarget={dailyTarget}
+                  macroTargets={macroTargets}
+                  fuelScore={fuelScore}
+                  historyLoading={historyLoading}
+                />
+              : <SignInPrompt feature="daily tracking"/>
+            }
+          </div>
         )}
 
         {/* ── INSIGHTS TAB ── */}
         {activeTab === 'insights' && (
-          isLoggedIn
-            ? <InsightsTab
-                insights={insights}
-                insightsLoading={insightsLoading}
-                dailyTarget={dailyTarget}
-                onRefresh={() => { setInsights(null); loadInsights(logs); }}
-              />
-            : <SignInPrompt feature="weekly insights"/>
+          <div data-tour="cal-insights-content">
+            {isLoggedIn
+              ? <InsightsTab
+                  insights={insights}
+                  insightsLoading={insightsLoading}
+                  dailyTarget={dailyTarget}
+                  onRefresh={() => { setInsights(null); loadInsights(logs); }}
+                />
+              : <SignInPrompt feature="weekly insights"/>
+            }
+          </div>
         )}
 
       </div>
