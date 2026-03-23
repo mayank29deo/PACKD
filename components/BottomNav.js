@@ -104,12 +104,12 @@ function MeIcon() {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
-  { href: '/feed',                      label: 'Home',    Icon: HomeIcon    },
-  { href: '/explore',                   label: 'Explore', Icon: ExploreIcon },
-  { href: '/create',                    label: 'Create',  Icon: CreateIcon, fab: true },
-  { href: '/calories',                  label: 'Calories', Icon: CalorieIcon },
-  { href: '/pack',                      label: 'Pack',    Icon: PackIcon    },
-  { href: '/profile',                   label: 'Me',      Icon: MeIcon      },
+  { href: '/feed',     label: 'Home',     Icon: HomeIcon,    tour: 'home'     },
+  { href: '/explore',  label: 'Explore',  Icon: ExploreIcon, tour: 'explore'  },
+  { href: '/create',   label: 'Create',   Icon: CreateIcon,  tour: 'create',  fab: true },
+  { href: '/calories', label: 'Calories', Icon: CalorieIcon, tour: 'calories' },
+  { href: '/pack',     label: 'Pack',     Icon: PackIcon,    tour: 'pack'     },
+  { href: '/profile',  label: 'Me',       Icon: MeIcon,      tour: 'me'       },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -119,13 +119,14 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-packd-card/95 backdrop-blur-md border-t border-packd-border">
       <div className="max-w-lg mx-auto flex items-end justify-around py-2">
-        {TABS.map(({ href, label, Icon, fab }) => {
+        {TABS.map(({ href, label, Icon, fab, tour }) => {
           const active = pathname === href || pathname.startsWith(href.split('?')[0] + '/') || pathname === href.split('?')[0];
 
           return (
             <Link
               key={href}
               href={href}
+              data-tour={tour}
               className={`flex flex-col items-center gap-0.5 px-2 pb-1 rounded-xl transition-all duration-150 relative ${
                 active ? 'text-packd-orange' : 'text-packd-gray hover:text-packd-text'
               }`}
