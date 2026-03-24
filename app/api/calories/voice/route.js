@@ -154,14 +154,18 @@ async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
     console.log(`[STT] normalised WAV: ${audioBuffer.length} bytes`);
   }
 
-  if (audioBuffer.length < 100) {
-    throw new Error(`Audio too small (${audioBuffer.length} bytes) — recording may have failed`);
+  // Minimum ~1 second of audio at 16kHz 16-bit mono = 32000 bytes (raw PCM)
+  // WAV header adds 44 bytes; anything under 8000 bytes is < 0.25s — not transcribable
+  if (audioBuffer.length < 8000) {
+    console.warn(`[STT] Audio too short: ${audioBuffer.length} bytes`);
+    throw new Error('STT_TOO_SHORT');
   }
 
   // 1️⃣ Try Groq Whisper
   try {
     const transcript = await transcribeWithGroq(audioBuffer, lang);
     if (transcript) { console.log('[STT] Groq succeeded'); return transcript; }
+    console.warn('[STT] Groq returned empty transcript');
   } catch (groqErr) {
     console.warn('[STT] Groq failed, trying Reverie:', groqErr.message);
   }
@@ -170,6 +174,7 @@ async function transcribeAudio(audioBase64, mimeType, lang = 'en') {
   try {
     const transcript = await transcribeWithReverie(audioBuffer, lang);
     if (transcript) { console.log('[STT] Reverie succeeded'); return transcript; }
+    console.warn('[STT] Reverie returned empty transcript');
   } catch (revErr) {
     console.warn('[STT] Reverie failed:', revErr.message);
   }
@@ -255,6 +260,9 @@ export async function POST(request) {
     console.error('Voice API error:', err);
     if (err.message === 'STT_FAILED') {
       return Response.json({ error: 'STT_FAILED', sttFailed: true }, { status: 422 });
+    }
+    if (err.message === 'STT_TOO_SHORT') {
+      return Response.json({ error: 'STT_TOO_SHORT', sttFailed: true }, { status: 422 });
     }
     return Response.json({ error: err.message || 'Voice analysis failed' }, { status: 500 });
   }
