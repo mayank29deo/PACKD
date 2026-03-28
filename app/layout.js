@@ -1,6 +1,7 @@
 import './globals.css';
 import { AppProvider } from '../lib/AppContext';
 import SessionWrapper from '../components/SessionWrapper';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata = {
   title: 'PACKD — Find Your Pack. Own Your Sport.',
@@ -16,6 +17,7 @@ export default function RootLayout({ children }) {
             {children}
           </AppProvider>
         </SessionWrapper>
+        <Analytics />
       </body>
     </html>
   );
